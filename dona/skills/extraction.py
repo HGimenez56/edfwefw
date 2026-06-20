@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 _VALID_KINDS = {"awaiting_my_reply", "i_promised", "awaiting_their_reply"}
 
 _INSTRUCTION = """\
-Você está analisando UMA mensagem de e-mail do dono. Extraia o que for
-acionável e responda APENAS em JSON com este formato exato:
+Você está analisando UMA mensagem do dono (e-mail OU WhatsApp). Extraia o que
+for acionável e responda APENAS em JSON com este formato exato:
 
 {
   "category": "trabalho" | "pessoal",

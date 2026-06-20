@@ -7,11 +7,11 @@ briefings e lembretes, e com o tempo prepara rascunhos **sempre pendentes da
 sua aprovação**. O "cérebro" usa a **API da OpenAI** (modelos GPT); a memória
 e o aprendizado ficam no próprio sistema.
 
-> Status: **Fases 0–2, 4 e 5 prontas.** A Dona já lê e-mails (IMAP e/ou
-> Microsoft Graph) e a agenda (ICS), extrai tarefas/pendências, monta briefing,
-> agenda, recap e prévia semanal, prepara rascunhos para aprovação, aprende com
-> seus 👍/👎 e ajuda na prep de reunião. Falta a **Fase 3 (WhatsApp)**, deixada
-> para o fim por ser a única que depende de uma conexão ativa.
+> Status: **Todas as fases (0–5) implementadas.** A Dona lê e-mails (IMAP e/ou
+> Microsoft Graph), a agenda (ICS) e o WhatsApp (opcional, somente leitura),
+> extrai tarefas/pendências, monta briefing, agenda, recap e prévia semanal,
+> prepara rascunhos para aprovação, aprende com seus 👍/👎 e ajuda na prep de
+> reunião. Falta só **ligar as conexões reais** (credenciais) para usar no dia a dia.
 
 ---
 
@@ -111,6 +111,17 @@ Escolha um backend em `EMAIL_BACKEND` (`imap`, `graph` ou `both`):
   primeiro `/sync` a Dona mostra uma URL + código para você autorizar (uma vez);
   depois renova sozinha. Lê entrada **e** enviados sem encaminhar nada.
 
+## Conectar o WhatsApp (Fase 3, opcional, somente leitura)
+Módulo opt-in que lê suas mensagens (recebidas e enviadas) no **mesmo número**,
+conectando como aparelho vinculado. **Nunca envia.** Risco de bloqueio baixo,
+mas não oficialmente zero (lib não-oficial). Passo a passo de pareamento em
+[`dona/ingest/whatsapp/README.md`](dona/ingest/whatsapp/README.md). Resumo:
+```bash
+docker compose --profile whatsapp up -d     # sobe núcleo + sidecar
+docker compose logs -f dona-whatsapp        # escaneie o QR (1ª vez)
+```
+As mensagens caem no mesmo banco e viram tarefas/pendências como os e-mails.
+
 ---
 
 ## Testes
@@ -136,5 +147,5 @@ filtros/redaction podem ser adicionados depois.
 - **Fase 2 — Calendário/agenda** ✅: parsing `.ics` + agenda do dia/semana.
 - **Fase 4 — Rascunhos + aprendizado** ✅: respostas/convites com aprovação + feedback.
 - **Fase 5 — Extras** ✅: prep de reunião, recap diário, resumo semanal, captura rápida.
-- **Fase 3 — WhatsApp (opcional)** ⏳: leitura via aparelho vinculado (só leitura).
-  Deixada para o fim por depender de uma sessão/conexão ativa.
+- **Fase 3 — WhatsApp (opcional)** ✅: leitura via aparelho vinculado (só leitura).
+  Sidecar em `dona/ingest/whatsapp/` (veja o README de lá para parear).

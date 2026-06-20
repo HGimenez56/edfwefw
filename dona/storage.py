@@ -144,9 +144,12 @@ class Storage:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=10)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        # WAL permite leitura/escrita concorrente segura entre o núcleo Python
+        # e o sidecar de WhatsApp (Node), que escrevem no mesmo arquivo.
+        conn.execute("PRAGMA journal_mode = WAL")
         try:
             yield conn
             conn.commit()
