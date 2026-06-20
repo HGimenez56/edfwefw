@@ -35,6 +35,7 @@ from ..skills import agenda as agenda_skill
 from ..skills import briefing as briefing_skill
 from ..skills import drafts as drafts_skill
 from ..skills import extraction
+from ..skills import extras as extras_skill
 from ..skills import learning
 from ..storage import Storage
 
@@ -62,6 +63,10 @@ class DonaTelegramBot:
         self._app.add_handler(CommandHandler("agenda", self._cmd_agenda))
         self._app.add_handler(CommandHandler("sync", self._cmd_sync))
         self._app.add_handler(CommandHandler("rascunho", self._cmd_draft))
+        self._app.add_handler(CommandHandler("nota", self._cmd_note))
+        self._app.add_handler(CommandHandler("recap", self._cmd_recap))
+        self._app.add_handler(CommandHandler("semana", self._cmd_week))
+        self._app.add_handler(CommandHandler("prep", self._cmd_prep))
         self._app.add_handler(CallbackQueryHandler(self._on_callback))
         self._app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text)
@@ -99,6 +104,8 @@ class DonaTelegramBot:
         jq.run_daily(
             self._job_weekly_preview, time=briefing_time, days=(0,), name="weekly"
         )
+        recap_time = dtime(hour=self._settings.recap_hour, tzinfo=tz)
+        jq.run_daily(self._job_daily_recap, time=recap_time, name="recap")
 
     # --- Autorização -------------------------------------------------------
     def _is_owner(self, update: Update) -> bool:
@@ -134,10 +141,15 @@ class DonaTelegramBot:
             "• /sync — buscar e-mails/agenda e extrair tarefas/pendências.\n"
             "• /tarefas — tarefas em aberto (com botões ✅👍👎⏰).\n"
             "• /pendencias — pendências em aberto (com botões).\n"
-            "• /rascunho <texto> — eu preparo uma resposta para você aprovar.\n\n"
-            "Automático: leio seus e-mails/agenda, te aviso de novas pendências "
-            "e mando o briefing diário. Seus 👍/👎 me ensinam o que priorizar.\n"
-            "Em breve: WhatsApp (opcional) e mais automações."
+            "• /rascunho <texto> — eu preparo uma resposta para você aprovar.\n"
+            "• /nota <texto> — captura rápida (vira tarefa). Encaminhar também vale.\n"
+            "• /prep — preparação para sua próxima reunião.\n"
+            "• /recap — recap do dia + agenda de amanhã.\n"
+            "• /semana — o que você entregou na semana.\n\n"
+            "Automático: leio seus e-mails/agenda, te aviso de novas pendências, "
+            "mando o briefing de manhã e o recap à noite. Seus 👍/👎 me ensinam "
+            "o que priorizar.\n"
+            "Em breve: WhatsApp (opcional)."
         )
 
     async def _cmd_tasks(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -258,6 +270,41 @@ class DonaTelegramBot:
         original = query.message.text or ""
         await query.edit_message_text(f"{original}\n\n— {msg}")
 
+    async def _cmd_note(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """/nota <texto> → captura rápida: vira uma tarefa."""
+        if not self._is_owner(update):
+            return
+        text = (update.message.text or "").partition(" ")[2].strip()
+        if not text:
+            await update.message.reply_text("Use: /nota <o que você quer lembrar>")
+            return
+        self._storage.add_task(title=text[:200], category="pessoal", priority=3)
+        await update.message.reply_text("📝 Anotado como tarefa. Veja em /tarefas.")
+
+    async def _cmd_recap(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self._is_owner(update):
+            return
+        text = extras_skill.build_daily_recap(self._storage, self._settings.timezone)
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+    async def _cmd_week(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self._is_owner(update):
+            return
+        text = extras_skill.build_weekly_accomplishments(
+            self._storage, self._settings.timezone
+        )
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+    async def _cmd_prep(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self._is_owner(update):
+            return
+        await self._app.bot.send_chat_action(update.effective_chat.id, "typing")
+        text = await asyncio.to_thread(
+            extras_skill.build_meeting_prep,
+            self._storage, self._brain, self._settings.timezone,
+        )
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
     async def _cmd_sync(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._is_owner(update):
             return
@@ -330,11 +377,29 @@ class DonaTelegramBot:
             briefing_skill.build_weekly_preview(self._storage, self._settings.timezone)
         )
 
+    async def _job_daily_recap(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._send_owner(
+            extras_skill.build_daily_recap(self._storage, self._settings.timezone)
+        )
+
     # --- Conversa livre ----------------------------------------------------
     async def _on_text(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._is_owner(update):
             return
         text = update.message.text or ""
+
+        # Captura rápida: mensagem encaminhada vira tarefa automaticamente.
+        is_forwarded = bool(
+            getattr(update.message, "forward_origin", None)
+            or update.message.forward_date
+        )
+        if is_forwarded:
+            self._storage.add_task(title=text[:200] or "(encaminhado)", priority=3)
+            await update.message.reply_text(
+                "📝 Encaminhado guardado como tarefa. Veja em /tarefas."
+            )
+            return
+
         await self._app.bot.send_chat_action(update.effective_chat.id, "typing")
         reply = self._brain.chat(text)
         await update.message.reply_text(reply)

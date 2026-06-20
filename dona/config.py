@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     email_fetch_limit: int = Field(default=30, alias="EMAIL_FETCH_LIMIT")
     # Hora local (0-23) do briefing diário.
     briefing_hour: int = Field(default=7, alias="BRIEFING_HOUR")
+    # Hora local (0-23) do recap de fim de dia.
+    recap_hour: int = Field(default=18, alias="RECAP_HOUR")
 
     # --- E-mail (Plano B: IMAP) ---
     imap_host: str = Field(default="", alias="IMAP_HOST")

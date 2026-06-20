@@ -280,6 +280,18 @@ class Storage:
                 (max(1, min(5, priority)), _now_iso(), task_id),
             )
 
+    def tasks_completed_between(
+        self, start_iso: str, end_iso: str
+    ) -> list[sqlite3.Row]:
+        """Tarefas concluídas (status=done) com updated_at em [start, end)."""
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM tasks WHERE status = 'done' "
+                "AND updated_at >= ? AND updated_at < ? "
+                "ORDER BY updated_at ASC",
+                (start_iso, end_iso),
+            ).fetchall()
+
     # --- Compromissos ------------------------------------------------------
     def add_commitment(
         self,
@@ -344,6 +356,28 @@ class Storage:
                  status, source, _now_iso()),
             )
             return cur.lastrowid if cur.rowcount else None
+
+    def next_event(self, after_iso: str) -> Optional[sqlite3.Row]:
+        """Próximo evento futuro (não cancelado) após `after_iso` (UTC ISO)."""
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM events WHERE start_at >= ? "
+                "AND (status IS NULL OR status != 'cancelled') "
+                "ORDER BY start_at ASC LIMIT 1",
+                (after_iso,),
+            ).fetchone()
+
+    def messages_for_contact(
+        self, needle: str, limit: int = 10
+    ) -> list[sqlite3.Row]:
+        """Mensagens recentes de/para um contato (match parcial em e-mail)."""
+        like = f"%{needle}%"
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM messages WHERE sender LIKE ? OR recipient LIKE ? "
+                "ORDER BY COALESCE(received_at, ingested_at) DESC LIMIT ?",
+                (like, like, limit),
+            ).fetchall()
 
     def events_between(self, start_iso: str, end_iso: str) -> list[sqlite3.Row]:
         """Eventos cujo início cai em [start_iso, end_iso). Tudo em UTC ISO."""

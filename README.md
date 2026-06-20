@@ -7,10 +7,11 @@ briefings e lembretes, e com o tempo prepara rascunhos **sempre pendentes da
 sua aprovação**. O "cérebro" usa a **API da OpenAI** (modelos GPT); a memória
 e o aprendizado ficam no próprio sistema.
 
-> Status: **Fase 1** — além do esqueleto (Telegram + cérebro + banco), a Dona já
-> lê e-mails (IMAP e/ou Microsoft Graph), extrai tarefas e pendências, detecta o
-> que espera sua resposta e manda o briefing diário. Próximas fases: agenda,
-> WhatsApp e rascunhos.
+> Status: **Fases 0–2, 4 e 5 prontas.** A Dona já lê e-mails (IMAP e/ou
+> Microsoft Graph) e a agenda (ICS), extrai tarefas/pendências, monta briefing,
+> agenda, recap e prévia semanal, prepara rascunhos para aprovação, aprende com
+> seus 👍/👎 e ajuda na prep de reunião. Falta a **Fase 3 (WhatsApp)**, deixada
+> para o fim por ser a única que depende de uma conexão ativa.
 
 ---
 
@@ -83,14 +84,21 @@ Os segredos ficam só no `.env` do servidor (nunca no repositório).
 ## Comandos do bot
 - `/start` — apresentação + mostra seu chat id.
 - `/ajuda` — lista o que a Dona já faz.
-- `/briefing` — monta o resumo do dia agora.
-- `/sync` — busca e-mails novos e extrai tarefas/pendências na hora.
-- `/tarefas` — tarefas em aberto.
-- `/pendencias` — pendências/compromissos em aberto.
+- `/briefing` — resumo do dia (agenda + tarefas + pendências).
+- `/agenda` — suas reuniões de hoje.
+- `/sync` — busca e-mails/agenda e extrai tarefas/pendências na hora.
+- `/tarefas` — tarefas em aberto, com botões ✅ feito / 👍 / 👎 / ⏰.
+- `/pendencias` — pendências em aberto, com botões.
+- `/rascunho <texto>` — a Dona prepara uma resposta para você aprovar.
+- `/nota <texto>` — captura rápida (vira tarefa). Encaminhar uma msg também vale.
+- `/prep` — preparação para a próxima reunião (junta o histórico do contato).
+- `/recap` — recap do dia + agenda de amanhã.
+- `/semana` — o que você entregou na semana.
 - Qualquer texto — conversa livre com o cérebro.
 
-Automático: a Dona busca e-mails a cada `EMAIL_POLL_MINUTES`, te avisa de novas
-pendências e envia o briefing diário às `BRIEFING_HOUR` (e a prévia aos domingos).
+Automático: a Dona busca e-mails/agenda a cada `EMAIL_POLL_MINUTES`, avisa de
+novas pendências, manda o briefing às `BRIEFING_HOUR`, o recap às `RECAP_HOUR` e
+a prévia da semana aos domingos. Os botões 👍/👎 ensinam a Dona a priorizar.
 
 ## Conectar o e-mail do Outlook (Fase 1)
 Escolha um backend em `EMAIL_BACKEND` (`imap`, `graph` ou `both`):
@@ -123,9 +131,10 @@ filtros/redaction podem ser adicionados depois.
 ---
 
 ## Roteiro (fases)
-- **Fase 0 — Esqueleto** ✅ (você está aqui): config, banco, cérebro, Telegram.
-- **Fase 1 — E-mail + tarefas + briefing**: ingestão IMAP/Graph, extração, briefing diário.
-- **Fase 2 — Calendário/agenda**: convites `.ics` + agenda do dia/semana.
-- **Fase 3 — WhatsApp (opcional)**: leitura via aparelho vinculado (só leitura).
-- **Fase 4 — Rascunhos + aprendizado**: respostas/convites com aprovação + feedback.
-- **Fase 5 — Extras**: prep de reunião, recap diário, resumo semanal, captura rápida.
+- **Fase 0 — Esqueleto** ✅: config, banco, cérebro, Telegram.
+- **Fase 1 — E-mail + tarefas + briefing** ✅: ingestão IMAP/Graph, extração, briefing.
+- **Fase 2 — Calendário/agenda** ✅: parsing `.ics` + agenda do dia/semana.
+- **Fase 4 — Rascunhos + aprendizado** ✅: respostas/convites com aprovação + feedback.
+- **Fase 5 — Extras** ✅: prep de reunião, recap diário, resumo semanal, captura rápida.
+- **Fase 3 — WhatsApp (opcional)** ⏳: leitura via aparelho vinculado (só leitura).
+  Deixada para o fim por depender de uma sessão/conexão ativa.
