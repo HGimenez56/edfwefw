@@ -39,15 +39,28 @@ class Settings(BaseSettings):
     db_path: Path = Field(default=Path("data/dona.db"), alias="DONA_DB_PATH")
     log_level: str = Field(default="INFO", alias="DONA_LOG_LEVEL")
 
-    # --- E-mail (Fase 1, IMAP) ---
+    # --- E-mail (Fase 1) ---
+    # Qual(is) backend(s) usar: 'imap' (Plano B), 'graph' (Plano A) ou 'both'.
+    email_backend: str = Field(default="imap", alias="EMAIL_BACKEND")
+    # De quantos em quantos minutos buscar e-mails novos.
+    email_poll_minutes: int = Field(default=10, alias="EMAIL_POLL_MINUTES")
+    # Quantos e-mails recentes considerar a cada busca.
+    email_fetch_limit: int = Field(default=30, alias="EMAIL_FETCH_LIMIT")
+    # Hora local (0-23) do briefing diário.
+    briefing_hour: int = Field(default=7, alias="BRIEFING_HOUR")
+
+    # --- E-mail (Plano B: IMAP) ---
     imap_host: str = Field(default="", alias="IMAP_HOST")
     imap_port: int = Field(default=993, alias="IMAP_PORT")
     imap_user: str = Field(default="", alias="IMAP_USER")
     imap_password: str = Field(default="", alias="IMAP_PASSWORD")
+    # Pasta de enviados na caixa IMAP (vazio = não ler enviados por IMAP).
+    imap_sent_folder: str = Field(default="", alias="IMAP_SENT_FOLDER")
 
-    # --- Microsoft Graph (Fase 1, opcional) ---
+    # --- E-mail (Plano A: Microsoft Graph) ---
     ms_graph_client_id: str = Field(default="", alias="MS_GRAPH_CLIENT_ID")
-    ms_graph_tenant_id: str = Field(default="", alias="MS_GRAPH_TENANT_ID")
+    # 'common' funciona para a maioria; use o tenant id se necessário.
+    ms_graph_tenant_id: str = Field(default="common", alias="MS_GRAPH_TENANT_ID")
 
     # --- WhatsApp (Fase 3, opcional) ---
     whatsapp_enabled: bool = Field(default=False, alias="WHATSAPP_ENABLED")
@@ -64,9 +77,22 @@ class Settings(BaseSettings):
         return bool(self.telegram_bot_token)
 
     @property
-    def email_ready(self) -> bool:
+    def imap_ready(self) -> bool:
         """True se a ingestão de e-mail via IMAP está configurada."""
         return bool(self.imap_host and self.imap_user and self.imap_password)
+
+    @property
+    def graph_ready(self) -> bool:
+        """True se a ingestão via Microsoft Graph está configurada."""
+        return bool(self.ms_graph_client_id)
+
+    @property
+    def email_ready(self) -> bool:
+        """True se ao menos um backend de e-mail ativo está configurado."""
+        backend = self.email_backend.lower()
+        imap_ok = self.imap_ready and backend in ("imap", "both")
+        graph_ok = self.graph_ready and backend in ("graph", "both")
+        return imap_ok or graph_ok
 
 
 @lru_cache(maxsize=1)

@@ -7,9 +7,10 @@ briefings e lembretes, e com o tempo prepara rascunhos **sempre pendentes da
 sua aprovação**. O "cérebro" usa a **API da OpenAI** (modelos GPT); a memória
 e o aprendizado ficam no próprio sistema.
 
-> Status: **Fase 0 (esqueleto)** — conversa pelo Telegram, banco e cérebro
-> prontos. Próximas fases adicionam e-mail, agenda, WhatsApp e rascunhos.
-> Veja o roteiro completo no plano do projeto.
+> Status: **Fase 1** — além do esqueleto (Telegram + cérebro + banco), a Dona já
+> lê e-mails (IMAP e/ou Microsoft Graph), extrai tarefas e pendências, detecta o
+> que espera sua resposta e manda o briefing diário. Próximas fases: agenda,
+> WhatsApp e rascunhos.
 
 ---
 
@@ -79,12 +80,28 @@ Os segredos ficam só no `.env` do servidor (nunca no repositório).
 
 ---
 
-## Comandos do bot (Fase 0)
+## Comandos do bot
 - `/start` — apresentação + mostra seu chat id.
 - `/ajuda` — lista o que a Dona já faz.
+- `/briefing` — monta o resumo do dia agora.
+- `/sync` — busca e-mails novos e extrai tarefas/pendências na hora.
 - `/tarefas` — tarefas em aberto.
 - `/pendencias` — pendências/compromissos em aberto.
 - Qualquer texto — conversa livre com o cérebro.
+
+Automático: a Dona busca e-mails a cada `EMAIL_POLL_MINUTES`, te avisa de novas
+pendências e envia o briefing diário às `BRIEFING_HOUR` (e a prévia aos domingos).
+
+## Conectar o e-mail do Outlook (Fase 1)
+Escolha um backend em `EMAIL_BACKEND` (`imap`, `graph` ou `both`):
+
+- **IMAP (Plano B):** crie no Outlook uma regra que encaminha cópia dos e-mails
+  para uma caixa dedicada (ex.: um Gmail) e preencha `IMAP_*` no `.env`. Para ler
+  também os enviados, aponte `IMAP_SENT_FOLDER`.
+- **Microsoft Graph (Plano A):** registre um app (público) no Azure AD com a
+  permissão delegada `Mail.Read`, coloque `MS_GRAPH_CLIENT_ID` no `.env`. No
+  primeiro `/sync` a Dona mostra uma URL + código para você autorizar (uma vez);
+  depois renova sozinha. Lê entrada **e** enviados sem encaminhar nada.
 
 ---
 

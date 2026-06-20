@@ -276,6 +276,13 @@ class Storage:
                 (limit,),
             ).fetchall()
 
+    def set_commitment_status(self, commitment_id: int, status: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
+                (status, _now_iso(), commitment_id),
+            )
+
     # --- Preferências / perfil --------------------------------------------
     def set_preference(
         self, scope: str, key: str, value: Any, weight: float = 1.0

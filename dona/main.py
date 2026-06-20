@@ -36,7 +36,11 @@ def _print_status(settings, brain: Brain) -> None:
     print("— Status da Dona —")
     print(f"{mark(brain.ready)} Cérebro (OpenAI)      modelo={settings.openai_model}")
     print(f"{mark(settings.telegram_ready)} Telegram (interface)")
-    print(f"{mark(settings.email_ready)} E-mail (IMAP)         [Fase 1]")
+    print(
+        f"{mark(settings.email_ready)} E-mail                "
+        f"backend={settings.email_backend} "
+        f"(imap={mark(settings.imap_ready)} graph={mark(settings.graph_ready)})"
+    )
     print(f"{mark(settings.whatsapp_enabled)} WhatsApp (opcional)   [Fase 3]")
     print(f"   Fuso: {settings.timezone} | Banco: {settings.db_path}")
 

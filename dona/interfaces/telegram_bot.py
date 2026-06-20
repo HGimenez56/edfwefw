@@ -11,9 +11,13 @@ copiar para o `.env` (passo único de configuração).
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import time as dtime
+from zoneinfo import ZoneInfo
 
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -24,6 +28,9 @@ from telegram.ext import (
 
 from ..brain import Brain
 from ..config import Settings
+from ..ingest import email as email_ingest
+from ..skills import briefing as briefing_skill
+from ..skills import extraction
 from ..storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -38,6 +45,7 @@ class DonaTelegramBot:
         self._brain = brain
         self._app = Application.builder().token(settings.telegram_bot_token).build()
         self._register_handlers()
+        self._register_jobs()
 
     def _register_handlers(self) -> None:
         self._app.add_handler(CommandHandler("start", self._cmd_start))
@@ -45,8 +53,35 @@ class DonaTelegramBot:
         self._app.add_handler(CommandHandler("help", self._cmd_help))
         self._app.add_handler(CommandHandler("tarefas", self._cmd_tasks))
         self._app.add_handler(CommandHandler("pendencias", self._cmd_commitments))
+        self._app.add_handler(CommandHandler("briefing", self._cmd_briefing))
+        self._app.add_handler(CommandHandler("sync", self._cmd_sync))
         self._app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text)
+        )
+
+    def _register_jobs(self) -> None:
+        """Agenda poll de e-mail, briefing diário e prévia semanal."""
+        jq = self._app.job_queue
+        if jq is None:  # extra [job-queue] não instalado
+            logger.warning("JobQueue indisponível; jobs não foram agendados.")
+            return
+        tz = ZoneInfo(self._settings.timezone)
+
+        if self._settings.email_ready:
+            jq.run_repeating(
+                self._job_poll_email,
+                interval=self._settings.email_poll_minutes * 60,
+                first=15,  # primeira varredura logo após subir
+                name="poll_email",
+            )
+        else:
+            logger.info("Nenhum backend de e-mail configurado; poll desativado.")
+
+        briefing_time = dtime(hour=self._settings.briefing_hour, tzinfo=tz)
+        jq.run_daily(self._job_daily_briefing, time=briefing_time, name="briefing")
+        # Prévia semanal aos domingos (0 = domingo no python-telegram-bot).
+        jq.run_daily(
+            self._job_weekly_preview, time=briefing_time, days=(0,), name="weekly"
         )
 
     # --- Autorização -------------------------------------------------------
@@ -76,12 +111,15 @@ class DonaTelegramBot:
 
     async def _cmd_help(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
-            "O que eu já faço (Fase 0):\n"
+            "O que eu já faço:\n"
             "• Conversar com você (é só mandar uma mensagem).\n"
+            "• /briefing — montar o resumo do dia agora.\n"
+            "• /sync — buscar e-mails novos e extrair tarefas/pendências.\n"
             "• /tarefas — listar tarefas em aberto.\n"
             "• /pendencias — listar pendências/compromissos em aberto.\n\n"
-            "Em breve: ler seus e-mails, montar o briefing do dia, lembretes "
-            "e preparar rascunhos para sua aprovação."
+            "Automático: leio seus e-mails de tempos em tempos, te aviso de novas "
+            "pendências e mando o briefing diário.\n"
+            "Em breve: agenda/reuniões e rascunhos para sua aprovação."
         )
 
     async def _cmd_tasks(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -113,6 +151,67 @@ class DonaTelegramBot:
             for i, c in enumerate(items, 1)
         ]
         await update.message.reply_text("🔔 Pendências:\n" + "\n".join(lines))
+
+    async def _cmd_briefing(
+        self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        if not self._is_owner(update):
+            return
+        text = briefing_skill.build_daily_briefing(self._storage)
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+    async def _cmd_sync(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self._is_owner(update):
+            return
+        if not self._settings.email_ready:
+            await update.message.reply_text(
+                "Nenhum backend de e-mail configurado ainda. Veja o .env."
+            )
+            return
+        await update.message.reply_text("🔄 Buscando e-mails...")
+        new, res = await self._sync_and_extract()
+        await update.message.reply_text(
+            f"✅ {new} e-mail(s) novo(s). "
+            f"{res.tasks_created} tarefa(s), {res.commitments_created} "
+            f"pendência(s), {res.resolved} resolvida(s)."
+        )
+
+    # --- Ações compartilhadas ---------------------------------------------
+    async def _sync_and_extract(self):
+        """Busca e-mails (em thread) e roda a extração. Retorna (novos, result)."""
+        new = await asyncio.to_thread(
+            email_ingest.sync_emails, self._settings, self._storage
+        )
+        result = await asyncio.to_thread(
+            extraction.run, self._storage, self._brain
+        )
+        return new, result
+
+    async def _send_owner(self, text: str) -> None:
+        """Envia uma mensagem proativa ao dono (se o chat id estiver setado)."""
+        owner = self._settings.telegram_owner_chat_id
+        if owner is None:
+            logger.warning("Sem TELEGRAM_OWNER_CHAT_ID; mensagem proativa ignorada.")
+            return
+        await self._app.bot.send_message(
+            owner, text, parse_mode=ParseMode.MARKDOWN
+        )
+
+    # --- Jobs agendados ----------------------------------------------------
+    async def _job_poll_email(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        new, result = await self._sync_and_extract()
+        # Avisa de forma enxuta só quando surge algo que precisa de resposta.
+        if result.commitments_created:
+            await self._send_owner(
+                f"🔔 {result.commitments_created} nova(s) pendência(s) na sua "
+                "caixa. Use /pendencias para ver."
+            )
+
+    async def _job_daily_briefing(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._send_owner(briefing_skill.build_daily_briefing(self._storage))
+
+    async def _job_weekly_preview(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._send_owner(briefing_skill.build_weekly_preview(self._storage))
 
     # --- Conversa livre ----------------------------------------------------
     async def _on_text(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
