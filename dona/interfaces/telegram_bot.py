@@ -16,10 +16,11 @@ import logging
 from datetime import time as dtime
 from zoneinfo import ZoneInfo
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -32,7 +33,9 @@ from ..ingest import calendar as calendar_ingest
 from ..ingest import email as email_ingest
 from ..skills import agenda as agenda_skill
 from ..skills import briefing as briefing_skill
+from ..skills import drafts as drafts_skill
 from ..skills import extraction
+from ..skills import learning
 from ..storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -58,6 +61,8 @@ class DonaTelegramBot:
         self._app.add_handler(CommandHandler("briefing", self._cmd_briefing))
         self._app.add_handler(CommandHandler("agenda", self._cmd_agenda))
         self._app.add_handler(CommandHandler("sync", self._cmd_sync))
+        self._app.add_handler(CommandHandler("rascunho", self._cmd_draft))
+        self._app.add_handler(CallbackQueryHandler(self._on_callback))
         self._app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text)
         )
@@ -127,42 +132,53 @@ class DonaTelegramBot:
             "• /briefing — montar o resumo do dia agora.\n"
             "• /agenda — suas reuniões de hoje.\n"
             "• /sync — buscar e-mails/agenda e extrair tarefas/pendências.\n"
-            "• /tarefas — listar tarefas em aberto.\n"
-            "• /pendencias — listar pendências/compromissos em aberto.\n\n"
-            "Automático: leio seus e-mails de tempos em tempos, te aviso de novas "
-            "pendências e mando o briefing diário.\n"
-            "Em breve: agenda/reuniões e rascunhos para sua aprovação."
+            "• /tarefas — tarefas em aberto (com botões ✅👍👎⏰).\n"
+            "• /pendencias — pendências em aberto (com botões).\n"
+            "• /rascunho <texto> — eu preparo uma resposta para você aprovar.\n\n"
+            "Automático: leio seus e-mails/agenda, te aviso de novas pendências "
+            "e mando o briefing diário. Seus 👍/👎 me ensinam o que priorizar.\n"
+            "Em breve: WhatsApp (opcional) e mais automações."
         )
 
     async def _cmd_tasks(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._is_owner(update):
             return
-        tasks = self._storage.open_tasks()
+        tasks = self._storage.open_tasks(limit=10)
         if not tasks:
             await update.message.reply_text("Sem tarefas em aberto. 🎉")
             return
-        lines = [
-            f"{i}. [{t['priority']}] {t['title']}"
-            + (f" — ⏰ {t['due_at']}" if t["due_at"] else "")
-            for i, t in enumerate(tasks, 1)
-        ]
-        await update.message.reply_text("📋 Tarefas em aberto:\n" + "\n".join(lines))
+        await update.message.reply_text("📋 *Tarefas em aberto*", parse_mode=ParseMode.MARKDOWN)
+        for t in tasks:
+            due = f"\n⏰ {t['due_at']}" if t["due_at"] else ""
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ Feito", callback_data=f"t|done|{t['id']}"),
+                InlineKeyboardButton("👍", callback_data=f"t|important|{t['id']}"),
+                InlineKeyboardButton("👎", callback_data=f"t|ignore|{t['id']}"),
+                InlineKeyboardButton("⏰", callback_data=f"t|snooze|{t['id']}"),
+            ]])
+            await update.message.reply_text(
+                f"[P{t['priority']}] {t['title']}{due}", reply_markup=keyboard
+            )
 
     async def _cmd_commitments(
         self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE
     ) -> None:
         if not self._is_owner(update):
             return
-        items = self._storage.open_commitments()
+        items = self._storage.open_commitments(limit=10)
         if not items:
             await update.message.reply_text("Nenhuma pendência em aberto. 👍")
             return
-        lines = [
-            f"{i}. ({c['kind']}) {c['summary']}"
-            + (f" — com {c['who']}" if c["who"] else "")
-            for i, c in enumerate(items, 1)
-        ]
-        await update.message.reply_text("🔔 Pendências:\n" + "\n".join(lines))
+        await update.message.reply_text("🔔 *Pendências*", parse_mode=ParseMode.MARKDOWN)
+        for c in items:
+            who = f" — {c['who']}" if c["who"] else ""
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ Resolvi", callback_data=f"c|resolve|{c['id']}"),
+                InlineKeyboardButton("👎 Ignorar", callback_data=f"c|ignore|{c['id']}"),
+            ]])
+            await update.message.reply_text(
+                f"{c['summary']}{who}", reply_markup=keyboard
+            )
 
     async def _cmd_briefing(
         self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE
@@ -181,6 +197,66 @@ class DonaTelegramBot:
             return
         text = agenda_skill.build_agenda(self._storage, self._settings.timezone)
         await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+    async def _cmd_draft(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """/rascunho <texto da mensagem recebida> → gera resposta para aprovar."""
+        if not self._is_owner(update):
+            return
+        original = (update.message.text or "").partition(" ")[2].strip()
+        if not original:
+            await update.message.reply_text(
+                "Use: /rascunho <cole aqui a mensagem que quer responder>"
+            )
+            return
+        await self._app.bot.send_chat_action(update.effective_chat.id, "typing")
+        body = await asyncio.to_thread(
+            drafts_skill.generate_reply_draft, self._brain, original
+        )
+        draft_id = self._storage.add_draft(kind="email_reply", body=body)
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Aprovar", callback_data=f"d|approve|{draft_id}"),
+            InlineKeyboardButton("❌ Descartar", callback_data=f"d|discard|{draft_id}"),
+        ]])
+        await update.message.reply_text(
+            f"✏️ *Rascunho de resposta:*\n\n{body}",
+            reply_markup=keyboard,
+            parse_mode=ParseMode.MARKDOWN,
+        )
+
+    async def _on_callback(
+        self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Trata os botões inline (feedback de itens e aprovação de rascunhos)."""
+        query = update.callback_query
+        if self._settings.telegram_owner_chat_id is not None and (
+            query.message.chat.id != self._settings.telegram_owner_chat_id
+        ):
+            await query.answer()
+            return
+        await query.answer()
+        try:
+            domain, signal, raw_id = (query.data or "").split("|", 2)
+            item_id = int(raw_id)
+        except ValueError:
+            return
+
+        if domain == "t":
+            msg = learning.apply_task_feedback(self._storage, item_id, signal)
+        elif domain == "c":
+            msg = learning.apply_commitment_feedback(self._storage, item_id, signal)
+        elif domain == "d":
+            if signal == "approve":
+                self._storage.set_draft_status(item_id, "approved")
+                msg = "✅ Aprovado! Copie o texto acima e envie. (Eu nunca envio sozinha.)"
+            else:
+                self._storage.set_draft_status(item_id, "rejected")
+                msg = "❌ Rascunho descartado."
+        else:
+            return
+
+        # Reflete o resultado removendo os botões e anexando a confirmação.
+        original = query.message.text or ""
+        await query.edit_message_text(f"{original}\n\n— {msg}")
 
     async def _cmd_sync(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._is_owner(update):

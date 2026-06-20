@@ -203,6 +203,12 @@ class Storage:
             )
             return cur.lastrowid if cur.rowcount else None
 
+    def get_message(self, message_id: int) -> Optional[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM messages WHERE id = ?", (message_id,)
+            ).fetchone()
+
     def unprocessed_messages(self, limit: int = 50) -> list[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
@@ -254,11 +260,24 @@ class Storage:
                 (limit,),
             ).fetchall()
 
+    def get_task(self, task_id: int) -> Optional[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM tasks WHERE id = ?", (task_id,)
+            ).fetchone()
+
     def set_task_status(self, task_id: int, status: str) -> None:
         with self._connect() as conn:
             conn.execute(
                 "UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?",
                 (status, _now_iso(), task_id),
+            )
+
+    def set_task_priority(self, task_id: int, priority: int) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE tasks SET priority = ?, updated_at = ? WHERE id = ?",
+                (max(1, min(5, priority)), _now_iso(), task_id),
             )
 
     # --- Compromissos ------------------------------------------------------
@@ -373,3 +392,48 @@ class Storage:
                 "UPDATE profile SET content = ?, updated_at = ? WHERE id = 1",
                 (content, _now_iso()),
             )
+
+    # --- Rascunhos ---------------------------------------------------------
+    def add_draft(
+        self,
+        *,
+        kind: str,
+        body: str,
+        target: Optional[str] = None,
+        subject: Optional[str] = None,
+        payload: Optional[str] = None,
+        source_msg_id: Optional[int] = None,
+    ) -> int:
+        now = _now_iso()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO drafts
+                  (kind, target, subject, body, payload, status,
+                   source_msg_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+                """,
+                (kind, target, subject, body, payload, source_msg_id, now, now),
+            )
+            return int(cur.lastrowid)
+
+    def get_draft(self, draft_id: int) -> Optional[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM drafts WHERE id = ?", (draft_id,)
+            ).fetchone()
+
+    def set_draft_status(self, draft_id: int, status: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE drafts SET status = ?, updated_at = ? WHERE id = ?",
+                (status, _now_iso(), draft_id),
+            )
+
+    def pending_drafts(self, limit: int = 50) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM drafts WHERE status = 'pending' "
+                "ORDER BY created_at ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
