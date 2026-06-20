@@ -1,0 +1,19 @@
+# Núcleo da Dona
+openai>=1.40.0
+python-telegram-bot>=21.0
+APScheduler>=3.10
+python-dotenv>=1.0
+pydantic>=2.7
+pydantic-settings>=2.3
+
+# Ingestão de e-mail (Fase 1 - IMAP, Plano B)
+# imap-tools é leve e fácil; usado nas fases seguintes
+imap-tools>=1.6
+
+# Calendário (Fase 2)
+icalendar>=5.0
+python-dateutil>=2.9
+
+# Microsoft Graph (Fase 1 - Plano A, opcional)
+msal>=1.28
+requests>=2.31

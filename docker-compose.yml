@@ -1,0 +1,10 @@
+# Sobe a Dona com um volume persistente para o banco SQLite.
+# Uso:  docker compose up -d   (depois de preencher o .env)
+services:
+  dona:
+    build: .
+    container_name: dona
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data

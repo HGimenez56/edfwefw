@@ -1,0 +1,130 @@
+"""Bot de Telegram — o canal por onde a Dona fala com o dono.
+
+Fase 0: comandos básicos e conversa livre (encaminhada ao cérebro). As fases
+seguintes adicionam botões de feedback (👍/👎/✅/⏰), aprovação de rascunhos e
+o disparo dos briefings agendados.
+
+Segurança: a Dona só responde ao `telegram_owner_chat_id` configurado. Se ele
+não estiver setado, o bot ainda responde mas avisa o chat id no log para você
+copiar para o `.env` (passo único de configuração).
+"""
+
+from __future__ import annotations
+
+import logging
+
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+
+from ..brain import Brain
+from ..config import Settings
+from ..storage import Storage
+
+logger = logging.getLogger(__name__)
+
+
+class DonaTelegramBot:
+    """Encapsula o app do python-telegram-bot e seus handlers."""
+
+    def __init__(self, settings: Settings, storage: Storage, brain: Brain) -> None:
+        self._settings = settings
+        self._storage = storage
+        self._brain = brain
+        self._app = Application.builder().token(settings.telegram_bot_token).build()
+        self._register_handlers()
+
+    def _register_handlers(self) -> None:
+        self._app.add_handler(CommandHandler("start", self._cmd_start))
+        self._app.add_handler(CommandHandler("ajuda", self._cmd_help))
+        self._app.add_handler(CommandHandler("help", self._cmd_help))
+        self._app.add_handler(CommandHandler("tarefas", self._cmd_tasks))
+        self._app.add_handler(CommandHandler("pendencias", self._cmd_commitments))
+        self._app.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text)
+        )
+
+    # --- Autorização -------------------------------------------------------
+    def _is_owner(self, update: Update) -> bool:
+        owner = self._settings.telegram_owner_chat_id
+        if owner is None:
+            # Ainda não configurado: registra o id para o usuário copiar.
+            chat_id = update.effective_chat.id if update.effective_chat else "?"
+            logger.warning(
+                "TELEGRAM_OWNER_CHAT_ID não configurado. Seu chat id é: %s "
+                "— copie para o .env para travar o acesso só a você.",
+                chat_id,
+            )
+            return True
+        return bool(update.effective_chat and update.effective_chat.id == owner)
+
+    # --- Comandos ----------------------------------------------------------
+    async def _cmd_start(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        chat_id = update.effective_chat.id if update.effective_chat else "?"
+        await update.message.reply_text(
+            "Oi! Eu sou a Dona, sua assistente. 👋\n\n"
+            f"Seu chat id é `{chat_id}` — coloque ele em "
+            "`TELEGRAM_OWNER_CHAT_ID` no .env para eu só falar com você.\n\n"
+            "Use /ajuda para ver o que já sei fazer.",
+            parse_mode="Markdown",
+        )
+
+    async def _cmd_help(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await update.message.reply_text(
+            "O que eu já faço (Fase 0):\n"
+            "• Conversar com você (é só mandar uma mensagem).\n"
+            "• /tarefas — listar tarefas em aberto.\n"
+            "• /pendencias — listar pendências/compromissos em aberto.\n\n"
+            "Em breve: ler seus e-mails, montar o briefing do dia, lembretes "
+            "e preparar rascunhos para sua aprovação."
+        )
+
+    async def _cmd_tasks(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self._is_owner(update):
+            return
+        tasks = self._storage.open_tasks()
+        if not tasks:
+            await update.message.reply_text("Sem tarefas em aberto. 🎉")
+            return
+        lines = [
+            f"{i}. [{t['priority']}] {t['title']}"
+            + (f" — ⏰ {t['due_at']}" if t["due_at"] else "")
+            for i, t in enumerate(tasks, 1)
+        ]
+        await update.message.reply_text("📋 Tarefas em aberto:\n" + "\n".join(lines))
+
+    async def _cmd_commitments(
+        self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        if not self._is_owner(update):
+            return
+        items = self._storage.open_commitments()
+        if not items:
+            await update.message.reply_text("Nenhuma pendência em aberto. 👍")
+            return
+        lines = [
+            f"{i}. ({c['kind']}) {c['summary']}"
+            + (f" — com {c['who']}" if c["who"] else "")
+            for i, c in enumerate(items, 1)
+        ]
+        await update.message.reply_text("🔔 Pendências:\n" + "\n".join(lines))
+
+    # --- Conversa livre ----------------------------------------------------
+    async def _on_text(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self._is_owner(update):
+            return
+        text = update.message.text or ""
+        await self._app.bot.send_chat_action(update.effective_chat.id, "typing")
+        reply = self._brain.chat(text)
+        await update.message.reply_text(reply)
+
+    # --- Ciclo de vida -----------------------------------------------------
+    def run(self) -> None:
+        """Bloqueia rodando o bot (long polling)."""
+        logger.info("Bot do Telegram iniciado (long polling).")
+        self._app.run_polling(allowed_updates=Update.ALL_TYPES)

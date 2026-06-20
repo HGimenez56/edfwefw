@@ -1,0 +1,30 @@
+# Segredos e config local
+.env
+*.env
+!.env.example
+
+# Banco de dados e dados locais da Dona
+*.db
+*.sqlite
+*.sqlite3
+data/
+dona.db
+
+# Sessão do WhatsApp (Fase 3)
+dona/ingest/whatsapp/auth/
+dona/ingest/whatsapp/node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
