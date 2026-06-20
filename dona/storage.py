@@ -91,6 +91,21 @@ CREATE TABLE IF NOT EXISTS profile (
     updated_at   TEXT NOT NULL
 );
 
+-- Eventos de calendário/reuniões (Fase 2). start_at/end_at em UTC ISO8601.
+CREATE TABLE IF NOT EXISTS events (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    uid          TEXT,                    -- UID do VEVENT (para dedup)
+    summary      TEXT,
+    location     TEXT,
+    organizer    TEXT,
+    start_at     TEXT NOT NULL,           -- UTC ISO8601
+    end_at       TEXT,                    -- UTC ISO8601
+    status       TEXT,                    -- 'confirmed'|'cancelled'|...
+    source       TEXT,                    -- 'ics_url'|'email_invite'
+    created_at   TEXT NOT NULL,
+    UNIQUE(uid, start_at)
+);
+
 -- Rascunhos preparados pela Dona aguardando aprovação (Fase 4).
 CREATE TABLE IF NOT EXISTS drafts (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,6 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_processed ON messages(processed);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_commitments_status ON commitments(status);
 CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
+CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_at);
 """
 
 
@@ -282,6 +298,44 @@ class Storage:
                 "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
                 (status, _now_iso(), commitment_id),
             )
+
+    # --- Eventos (calendário) ---------------------------------------------
+    def add_event(
+        self,
+        *,
+        summary: str,
+        start_at: str,
+        end_at: Optional[str] = None,
+        uid: Optional[str] = None,
+        location: Optional[str] = None,
+        organizer: Optional[str] = None,
+        status: Optional[str] = None,
+        source: Optional[str] = None,
+    ) -> Optional[int]:
+        """Insere um evento. Retorna o id, ou None se for duplicata."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT OR IGNORE INTO events
+                  (uid, summary, location, organizer, start_at, end_at,
+                   status, source, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (uid, summary, location, organizer, start_at, end_at,
+                 status, source, _now_iso()),
+            )
+            return cur.lastrowid if cur.rowcount else None
+
+    def events_between(self, start_iso: str, end_iso: str) -> list[sqlite3.Row]:
+        """Eventos cujo início cai em [start_iso, end_iso). Tudo em UTC ISO."""
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM events "
+                "WHERE start_at >= ? AND start_at < ? "
+                "AND (status IS NULL OR status != 'cancelled') "
+                "ORDER BY start_at ASC",
+                (start_iso, end_iso),
+            ).fetchall()
 
     # --- Preferências / perfil --------------------------------------------
     def set_preference(

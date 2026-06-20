@@ -41,6 +41,7 @@ def _print_status(settings, brain: Brain) -> None:
         f"backend={settings.email_backend} "
         f"(imap={mark(settings.imap_ready)} graph={mark(settings.graph_ready)})"
     )
+    print(f"{mark(settings.calendar_ready)} Agenda (ICS)          [Fase 2]")
     print(f"{mark(settings.whatsapp_enabled)} WhatsApp (opcional)   [Fase 3]")
     print(f"   Fuso: {settings.timezone} | Banco: {settings.db_path}")
 

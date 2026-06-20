@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # 'common' funciona para a maioria; use o tenant id se necessário.
     ms_graph_tenant_id: str = Field(default="common", alias="MS_GRAPH_TENANT_ID")
 
+    # --- Calendário (Fase 2) ---
+    # URL do ICS publicado do seu calendário do Outlook (read-only).
+    calendar_ics_url: str = Field(default="", alias="CALENDAR_ICS_URL")
+
     # --- WhatsApp (Fase 3, opcional) ---
     whatsapp_enabled: bool = Field(default=False, alias="WHATSAPP_ENABLED")
 
@@ -85,6 +89,11 @@ class Settings(BaseSettings):
     def graph_ready(self) -> bool:
         """True se a ingestão via Microsoft Graph está configurada."""
         return bool(self.ms_graph_client_id)
+
+    @property
+    def calendar_ready(self) -> bool:
+        """True se há um ICS publicado configurado."""
+        return bool(self.calendar_ics_url)
 
     @property
     def email_ready(self) -> bool:

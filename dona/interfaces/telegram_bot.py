@@ -28,7 +28,9 @@ from telegram.ext import (
 
 from ..brain import Brain
 from ..config import Settings
+from ..ingest import calendar as calendar_ingest
 from ..ingest import email as email_ingest
+from ..skills import agenda as agenda_skill
 from ..skills import briefing as briefing_skill
 from ..skills import extraction
 from ..storage import Storage
@@ -54,6 +56,7 @@ class DonaTelegramBot:
         self._app.add_handler(CommandHandler("tarefas", self._cmd_tasks))
         self._app.add_handler(CommandHandler("pendencias", self._cmd_commitments))
         self._app.add_handler(CommandHandler("briefing", self._cmd_briefing))
+        self._app.add_handler(CommandHandler("agenda", self._cmd_agenda))
         self._app.add_handler(CommandHandler("sync", self._cmd_sync))
         self._app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text)
@@ -76,6 +79,14 @@ class DonaTelegramBot:
             )
         else:
             logger.info("Nenhum backend de e-mail configurado; poll desativado.")
+
+        if self._settings.calendar_ready:
+            jq.run_repeating(
+                self._job_poll_calendar,
+                interval=self._settings.email_poll_minutes * 60,
+                first=30,
+                name="poll_calendar",
+            )
 
         briefing_time = dtime(hour=self._settings.briefing_hour, tzinfo=tz)
         jq.run_daily(self._job_daily_briefing, time=briefing_time, name="briefing")
@@ -114,7 +125,8 @@ class DonaTelegramBot:
             "O que eu já faço:\n"
             "• Conversar com você (é só mandar uma mensagem).\n"
             "• /briefing — montar o resumo do dia agora.\n"
-            "• /sync — buscar e-mails novos e extrair tarefas/pendências.\n"
+            "• /agenda — suas reuniões de hoje.\n"
+            "• /sync — buscar e-mails/agenda e extrair tarefas/pendências.\n"
             "• /tarefas — listar tarefas em aberto.\n"
             "• /pendencias — listar pendências/compromissos em aberto.\n\n"
             "Automático: leio seus e-mails de tempos em tempos, te aviso de novas "
@@ -157,7 +169,17 @@ class DonaTelegramBot:
     ) -> None:
         if not self._is_owner(update):
             return
-        text = briefing_skill.build_daily_briefing(self._storage)
+        text = briefing_skill.build_daily_briefing(
+            self._storage, self._settings.timezone
+        )
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+    async def _cmd_agenda(
+        self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        if not self._is_owner(update):
+            return
+        text = agenda_skill.build_agenda(self._storage, self._settings.timezone)
         await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
     async def _cmd_sync(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -178,10 +200,17 @@ class DonaTelegramBot:
 
     # --- Ações compartilhadas ---------------------------------------------
     async def _sync_and_extract(self):
-        """Busca e-mails (em thread) e roda a extração. Retorna (novos, result)."""
+        """Busca e-mails + calendário (em thread) e roda a extração."""
         new = await asyncio.to_thread(
             email_ingest.sync_emails, self._settings, self._storage
         )
+        if self._settings.calendar_ready:
+            try:
+                await asyncio.to_thread(
+                    calendar_ingest.sync_calendar, self._settings, self._storage
+                )
+            except Exception as exc:
+                logger.error("Falha ao sincronizar calendário: %s", exc)
         result = await asyncio.to_thread(
             extraction.run, self._storage, self._brain
         )
@@ -207,11 +236,23 @@ class DonaTelegramBot:
                 "caixa. Use /pendencias para ver."
             )
 
+    async def _job_poll_calendar(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        try:
+            await asyncio.to_thread(
+                calendar_ingest.sync_calendar, self._settings, self._storage
+            )
+        except Exception as exc:
+            logger.error("Falha ao sincronizar calendário: %s", exc)
+
     async def _job_daily_briefing(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._send_owner(briefing_skill.build_daily_briefing(self._storage))
+        await self._send_owner(
+            briefing_skill.build_daily_briefing(self._storage, self._settings.timezone)
+        )
 
     async def _job_weekly_preview(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._send_owner(briefing_skill.build_weekly_preview(self._storage))
+        await self._send_owner(
+            briefing_skill.build_weekly_preview(self._storage, self._settings.timezone)
+        )
 
     # --- Conversa livre ----------------------------------------------------
     async def _on_text(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
