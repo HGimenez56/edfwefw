@@ -7,6 +7,9 @@ briefings e lembretes, e com o tempo prepara rascunhos **sempre pendentes da
 sua aprovação**. O "cérebro" usa a **API da OpenAI** (modelos GPT); a memória
 e o aprendizado ficam no próprio sistema.
 
+> 🚀 **Para colocar a Dona no ar, siga o [GUIA.md](GUIA.md)** — passo a passo do
+> zero ao 24/7 (Telegram, OpenAI, e-mail, agenda, WhatsApp e hospedagem).
+
 > Status: **Todas as fases (0–5) implementadas.** A Dona lê e-mails (IMAP e/ou
 > Microsoft Graph), a agenda (ICS) e o WhatsApp (opcional, somente leitura),
 > extrai tarefas/pendências, monta briefing, agenda, recap e prévia semanal,
