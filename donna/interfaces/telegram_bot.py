@@ -1,10 +1,10 @@
-"""Bot de Telegram — o canal por onde a Dona fala com o dono.
+"""Bot de Telegram — o canal por onde a Donna fala com o dono.
 
 Fase 0: comandos básicos e conversa livre (encaminhada ao cérebro). As fases
 seguintes adicionam botões de feedback (👍/👎/✅/⏰), aprovação de rascunhos e
 o disparo dos briefings agendados.
 
-Segurança: a Dona só responde ao `telegram_owner_chat_id` configurado. Se ele
+Segurança: a Donna só responde ao `telegram_owner_chat_id` configurado. Se ele
 não estiver setado, o bot ainda responde mas avisa o chat id no log para você
 copiar para o `.env` (passo único de configuração).
 """
@@ -42,7 +42,7 @@ from ..storage import Storage
 logger = logging.getLogger(__name__)
 
 
-class DonaTelegramBot:
+class DonnaTelegramBot:
     """Encapsula o app do python-telegram-bot e seus handlers."""
 
     def __init__(self, settings: Settings, storage: Storage, brain: Brain) -> None:
@@ -125,7 +125,7 @@ class DonaTelegramBot:
     async def _cmd_start(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id = update.effective_chat.id if update.effective_chat else "?"
         await update.message.reply_text(
-            "Oi! Eu sou a Dona, sua assistente. 👋\n\n"
+            "Oi! Eu sou a Donna, sua assistente. 👋\n\n"
             f"Seu chat id é `{chat_id}` — coloque ele em "
             "`TELEGRAM_OWNER_CHAT_ID` no .env para eu só falar com você.\n\n"
             "Use /ajuda para ver o que já sei fazer.",

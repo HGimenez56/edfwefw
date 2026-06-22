@@ -1,23 +1,23 @@
-# Sobe a Dona com um volume persistente para o banco SQLite.
+# Sobe a Donna com um volume persistente para o banco SQLite.
 # Uso:  docker compose up -d                       (núcleo)
 #       docker compose --profile whatsapp up -d    (núcleo + WhatsApp)
 services:
-  dona:
+  donna:
     build: .
-    container_name: dona
+    container_name: donna
     restart: unless-stopped
     env_file: .env
     volumes:
       - ./data:/app/data
 
   # Opcional (somente leitura). Só sobe com:  --profile whatsapp
-  dona-whatsapp:
-    build: ./dona/ingest/whatsapp
-    container_name: dona-whatsapp
+  donna-whatsapp:
+    build: ./donna/ingest/whatsapp
+    container_name: donna-whatsapp
     restart: unless-stopped
     profiles: ["whatsapp"]
     environment:
-      DONA_DB_PATH: /app/data/dona.db
+      DONNA_DB_PATH: /app/data/donna.db
     volumes:
       - ./data:/app/data
-      - ./dona/ingest/whatsapp/auth:/app/whatsapp/auth
+      - ./donna/ingest/whatsapp/auth:/app/whatsapp/auth

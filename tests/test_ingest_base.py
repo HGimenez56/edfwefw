@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from dona.ingest.base import IngestedEmail, store_emails
-from dona.storage import Storage
+from donna.ingest.base import IngestedEmail, store_emails
+from donna.storage import Storage
 
 
 def _email(ext_id: str, direction: str = "in") -> IngestedEmail:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from dona.storage import Storage
+from donna.storage import Storage
 
 
 def _store(tmp_path: Path) -> Storage:

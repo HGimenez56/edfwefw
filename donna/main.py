@@ -1,12 +1,12 @@
-"""Ponto de entrada da Dona.
+"""Ponto de entrada da Donna.
 
 Fase 0: inicializa configuração, banco e cérebro, valida o que está pronto e
 sobe o bot do Telegram. As fases seguintes plugam aqui o agendador
 (briefings/lembretes) e os adapters de ingestão (e-mail, calendário, whatsapp).
 
 Uso:
-    python -m dona.main          # sobe a Dona
-    python -m dona.main --check  # só checa a configuração e sai
+    python -m donna.main          # sobe a Donna
+    python -m donna.main --check  # só checa a configuração e sai
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import sys
 
 from .brain import Brain
 from .config import get_settings
-from .interfaces.telegram_bot import DonaTelegramBot
+from .interfaces.telegram_bot import DonnaTelegramBot
 from .storage import Storage
 
 
@@ -33,7 +33,7 @@ def _print_status(settings, brain: Brain) -> None:
     def mark(ok: bool) -> str:
         return "✅" if ok else "⬜"
 
-    print("— Status da Dona —")
+    print("— Status da Donna —")
     print(f"{mark(brain.ready)} Cérebro (OpenAI)      modelo={settings.openai_model}")
     print(f"{mark(settings.telegram_ready)} Telegram (interface)")
     print(
@@ -47,7 +47,7 @@ def _print_status(settings, brain: Brain) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Dona — assistente pessoal")
+    parser = argparse.ArgumentParser(description="Donna — assistente pessoal")
     parser.add_argument(
         "--check",
         action="store_true",
@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
 
     settings = get_settings()
     _setup_logging(settings.log_level)
-    logger = logging.getLogger("dona")
+    logger = logging.getLogger("donna")
 
     storage = Storage(settings.db_path)
     brain = Brain(settings, storage)
@@ -74,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    bot = DonaTelegramBot(settings, storage, brain)
+    bot = DonnaTelegramBot(settings, storage, brain)
     bot.run()
     return 0
 

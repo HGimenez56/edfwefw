@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from dona.skills import extraction
-from dona.storage import Storage
+from donna.skills import extraction
+from donna.storage import Storage
 
 
 class FakeBrain:

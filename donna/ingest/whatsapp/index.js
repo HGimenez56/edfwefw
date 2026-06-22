@@ -1,9 +1,9 @@
 /**
- * Sidecar de WhatsApp da Dona — SOMENTE LEITURA.
+ * Sidecar de WhatsApp da Donna — SOMENTE LEITURA.
  *
  * Conecta como "aparelho vinculado" (Baileys), lê as mensagens recebidas e
  * enviadas do seu próprio número e as grava na MESMA tabela `messages` do
- * SQLite da Dona (source='whatsapp'). A partir daí, o núcleo Python já cuida de
+ * SQLite da Donna (source='whatsapp'). A partir daí, o núcleo Python já cuida de
  * extrair tarefas/pendências — este processo NÃO faz nada além de ler.
  *
  * Importante: este sidecar NUNCA envia mensagens. Não há nenhuma chamada de
@@ -21,12 +21,12 @@ const {
   fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
 
-const logger = pino({ level: process.env.DONA_LOG_LEVEL?.toLowerCase() || 'info' });
+const logger = pino({ level: process.env.DONNA_LOG_LEVEL?.toLowerCase() || 'info' });
 
-// Caminho do banco — o mesmo usado pelo núcleo Python (DONA_DB_PATH).
-const DB_PATH = process.env.DONA_DB_PATH
-  ? path.resolve(process.env.DONA_DB_PATH)
-  : path.resolve(__dirname, '../../../data/dona.db');
+// Caminho do banco — o mesmo usado pelo núcleo Python (DONNA_DB_PATH).
+const DB_PATH = process.env.DONNA_DB_PATH
+  ? path.resolve(process.env.DONNA_DB_PATH)
+  : path.resolve(__dirname, '../../../data/donna.db');
 
 const AUTH_DIR = path.join(__dirname, 'auth');
 

@@ -8,15 +8,15 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from dona.ingest import calendar as cal
-from dona.skills import agenda
-from dona.storage import Storage
+from donna.ingest import calendar as cal
+from donna.skills import agenda
+from donna.storage import Storage
 
 # ICS com fuso explícito (UTC) e um evento de dia inteiro.
 SAMPLE_ICS = """\
 BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Teste//Dona//PT
+PRODID:-//Teste//Donna//PT
 BEGIN:VEVENT
 UID:evt-1
 SUMMARY:Reunião com Cliente X

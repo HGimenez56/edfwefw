@@ -1,4 +1,4 @@
-"""Cérebro da Dona — interface com a API da OpenAI.
+"""Cérebro da Donna — interface com a API da OpenAI.
 
 Centraliza TODA conversa com o modelo. As outras partes do sistema chamam
 métodos de alto nível (`chat`, `extract_json`) e nunca falam direto com o
@@ -7,7 +7,7 @@ futuro fica num lugar só.
 
 Memória/aprendizado: o método `system_prompt` monta o contexto persistente
 (perfil + preferências) que é injetado em toda chamada. É isso que faz a
-Dona "lembrar" das suas preferências sem depender da memória do ChatGPT.
+Donna "lembrar" das suas preferências sem depender da memória do ChatGPT.
 """
 
 from __future__ import annotations
@@ -24,10 +24,10 @@ from .storage import Storage
 logger = logging.getLogger(__name__)
 
 
-# Personalidade base da Dona. O perfil e as preferências aprendidas são
+# Personalidade base da Donna. O perfil e as preferências aprendidas são
 # anexados a isto em tempo de execução por `Brain.system_prompt`.
 BASE_PERSONA = """\
-Você é a "Dona", a assistente virtual pessoal de um único usuário (o "dono").
+Você é a "Donna", a assistente virtual pessoal de um único usuário (o "dono").
 Seu papel é ajudá-lo a não deixar passar pedidos, compromissos e follow-ups,
 organizar o dia, lembrar do que importa e, quando solicitado, preparar
 rascunhos. Princípios:

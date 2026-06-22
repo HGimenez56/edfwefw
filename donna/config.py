@@ -1,4 +1,4 @@
-"""Configuração central da Dona.
+"""Configuração central da Donna.
 
 Carrega as variáveis de ambiente (a partir de um arquivo `.env`, se existir)
 e as expõe de forma tipada via `Settings`. Tudo que é segredo ou específico
@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     )
 
     # --- Geral ---
-    timezone: str = Field(default="America/Sao_Paulo", alias="DONA_TIMEZONE")
-    db_path: Path = Field(default=Path("data/dona.db"), alias="DONA_DB_PATH")
-    log_level: str = Field(default="INFO", alias="DONA_LOG_LEVEL")
+    timezone: str = Field(default="America/Sao_Paulo", alias="DONNA_TIMEZONE")
+    db_path: Path = Field(default=Path("data/donna.db"), alias="DONNA_DB_PATH")
+    log_level: str = Field(default="INFO", alias="DONNA_LOG_LEVEL")
 
     # --- E-mail (Fase 1) ---
     # Qual(is) backend(s) usar: 'imap' (Plano B), 'graph' (Plano A) ou 'both'.

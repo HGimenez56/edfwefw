@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from dona.skills import briefing
-from dona.storage import Storage
+from donna.skills import briefing
+from donna.storage import Storage
 
 
 def test_daily_briefing_empty(tmp_path: Path) -> None:

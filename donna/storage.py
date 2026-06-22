@@ -1,4 +1,4 @@
-"""Camada de armazenamento da Dona (SQLite).
+"""Camada de armazenamento da Donna (SQLite).
 
 Um único arquivo SQLite guarda tudo: mensagens ingeridas, tarefas e
 compromissos extraídos, preferências aprendidas e o perfil do dono. O schema
@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS events (
     UNIQUE(uid, start_at)
 );
 
--- Rascunhos preparados pela Dona aguardando aprovação (Fase 4).
+-- Rascunhos preparados pela Donna aguardando aprovação (Fase 4).
 CREATE TABLE IF NOT EXISTS drafts (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     kind         TEXT NOT NULL,           -- 'email_reply'|'meeting_invite'

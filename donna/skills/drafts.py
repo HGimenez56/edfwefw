@@ -1,6 +1,6 @@
 """Motor de rascunhos (Fase 4).
 
-Gera rascunhos que **sempre** dependem da aprovação do dono — a Dona nunca
+Gera rascunhos que **sempre** dependem da aprovação do dono — a Donna nunca
 envia nada sozinha. Dois tipos:
 - resposta a um e-mail/mensagem (texto, no tom do dono);
 - convite de reunião (texto + arquivo `.ics` pronto para enviar).
@@ -49,7 +49,7 @@ def build_ics(
 ) -> str:
     """Constrói um `.ics` (VCALENDAR com um VEVENT). Datas devem ser aware."""
     cal = Calendar()
-    cal.add("prodid", "-//Dona//Assistente//PT")
+    cal.add("prodid", "-//Donna//Assistente//PT")
     cal.add("version", "2.0")
     cal.add("method", "REQUEST")
 

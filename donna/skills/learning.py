@@ -1,7 +1,7 @@
 """Aprendizado por feedback (Fase 4).
 
 Quando o dono reage a um item (👍 importante / 👎 ignorar / ✅ feito / ⏰ adiar),
-a Dona (1) atualiza o estado do item e (2) ajusta preferências — em especial o
+a Donna (1) atualiza o estado do item e (2) ajusta preferências — em especial o
 peso/prioridade do remetente de origem. Essas preferências são injetadas no
 prompt do cérebro (`Brain.system_prompt`), então a priorização e o tom melhoram
 a cada interação. É a "memória que vira gente" sem depender do ChatGPT pessoal.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from dona.skills import drafts
+from donna.skills import drafts
 
 
 class StubBrain:

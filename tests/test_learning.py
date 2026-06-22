@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from dona.skills import learning
-from dona.storage import Storage
+from donna.skills import learning
+from donna.storage import Storage
 
 
 _counter = 0

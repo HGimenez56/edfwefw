@@ -3,16 +3,16 @@
 *.env
 !.env.example
 
-# Banco de dados e dados locais da Dona
+# Banco de dados e dados locais da Donna
 *.db
 *.sqlite
 *.sqlite3
 data/
-dona.db
+donna.db
 
 # Sessão do WhatsApp (Fase 3)
-dona/ingest/whatsapp/auth/
-dona/ingest/whatsapp/node_modules/
+donna/ingest/whatsapp/auth/
+donna/ingest/whatsapp/node_modules/
 
 # Python
 __pycache__/

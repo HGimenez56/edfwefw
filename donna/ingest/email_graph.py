@@ -2,7 +2,7 @@
 
 Acesso delegado **só-leitura** ao Outlook do trabalho, sem encaminhar nada e
 sem precisar de admin (se o tenant permitir consentimento de usuário). Usa o
-*device-code flow* da MSAL: no primeiro uso, a Dona mostra uma URL + código
+*device-code flow* da MSAL: no primeiro uso, a Donna mostra uma URL + código
 para você autorizar no navegador; depois o token é renovado silenciosamente a
 partir de um cache em disco (`data/graph_token.json`, fora do git).
 

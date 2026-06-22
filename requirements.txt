@@ -1,4 +1,4 @@
-# Núcleo da Dona
+# Núcleo da Donna
 openai>=1.40.0
 # [job-queue] habilita a JobQueue interna (briefings/poll), via APScheduler.
 python-telegram-bot[job-queue]>=21.0

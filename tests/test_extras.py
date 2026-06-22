@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from dona.skills import extras
-from dona.storage import Storage
+from donna.skills import extras
+from donna.storage import Storage
 
 TZ = "America/Sao_Paulo"
 

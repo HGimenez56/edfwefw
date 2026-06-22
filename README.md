@@ -1,16 +1,16 @@
-# Dona 🤖 — Assistente Virtual Pessoal com IA
+# Donna 🤖 — Assistente Virtual Pessoal com IA
 
-A **Dona** é uma assistente pessoal (uso individual, não distribuída) que lê
+A **Donna** é uma assistente pessoal (uso individual, não distribuída) que lê
 suas comunicações — e-mail do trabalho e, opcionalmente, WhatsApp pessoal —,
 extrai o que importa (pedidos, compromissos, follow-ups), te organiza com
 briefings e lembretes, e com o tempo prepara rascunhos **sempre pendentes da
 sua aprovação**. O "cérebro" usa a **API da OpenAI** (modelos GPT); a memória
 e o aprendizado ficam no próprio sistema.
 
-> 🚀 **Para colocar a Dona no ar, siga o [GUIA.md](GUIA.md)** — passo a passo do
+> 🚀 **Para colocar a Donna no ar, siga o [GUIA.md](GUIA.md)** — passo a passo do
 > zero ao 24/7 (Telegram, OpenAI, e-mail, agenda, WhatsApp e hospedagem).
 
-> Status: **Todas as fases (0–5) implementadas.** A Dona lê e-mails (IMAP e/ou
+> Status: **Todas as fases (0–5) implementadas.** A Donna lê e-mails (IMAP e/ou
 > Microsoft Graph), a agenda (ICS) e o WhatsApp (opcional, somente leitura),
 > extrai tarefas/pendências, monta briefing, agenda, recap e prévia semanal,
 > prepara rascunhos para aprovação, aprende com seus 👍/👎 e ajuda na prep de
@@ -21,7 +21,7 @@ e o aprendizado ficam no próprio sistema.
 ## Arquitetura (resumo)
 
 ```
-Fontes  →  Núcleo (Dona)  →  Você (Telegram)
+Fontes  →  Núcleo (Donna)  →  Você (Telegram)
 e-mail      ingestão           conversa,
 whatsapp    cérebro (OpenAI)   aprova rascunhos,
             memória (SQLite)    dá feedback
@@ -29,7 +29,7 @@ whatsapp    cérebro (OpenAI)   aprova rascunhos,
 ```
 
 - **Interface:** bot de Telegram (push no celular, aprovação com um toque).
-- **Banco:** SQLite (`data/dona.db`).
+- **Banco:** SQLite (`data/donna.db`).
 - **Não é** um app pra baixar nem um site — é um serviço que roda 24/7 num
   servidor + o chat no Telegram.
 
@@ -56,14 +56,14 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # checa a configuração sem subir nada:
-python -m dona.main --check
+python -m donna.main --check
 
-# sobe a Dona:
-python -m dona.main
+# sobe a Donna:
+python -m donna.main
 ```
 Depois mande `/start` para o seu bot no Telegram. Ele vai te responder com o
 seu **chat id** — copie para `TELEGRAM_OWNER_CHAT_ID` no `.env` e reinicie,
-assim a Dona só conversa com você.
+assim a Donna só conversa com você.
 
 ### 4. Rodar com Docker (recomendado para o servidor 24/7)
 ```bash
@@ -86,22 +86,22 @@ Os segredos ficam só no `.env` do servidor (nunca no repositório).
 
 ## Comandos do bot
 - `/start` — apresentação + mostra seu chat id.
-- `/ajuda` — lista o que a Dona já faz.
+- `/ajuda` — lista o que a Donna já faz.
 - `/briefing` — resumo do dia (agenda + tarefas + pendências).
 - `/agenda` — suas reuniões de hoje.
 - `/sync` — busca e-mails/agenda e extrai tarefas/pendências na hora.
 - `/tarefas` — tarefas em aberto, com botões ✅ feito / 👍 / 👎 / ⏰.
 - `/pendencias` — pendências em aberto, com botões.
-- `/rascunho <texto>` — a Dona prepara uma resposta para você aprovar.
+- `/rascunho <texto>` — a Donna prepara uma resposta para você aprovar.
 - `/nota <texto>` — captura rápida (vira tarefa). Encaminhar uma msg também vale.
 - `/prep` — preparação para a próxima reunião (junta o histórico do contato).
 - `/recap` — recap do dia + agenda de amanhã.
 - `/semana` — o que você entregou na semana.
 - Qualquer texto — conversa livre com o cérebro.
 
-Automático: a Dona busca e-mails/agenda a cada `EMAIL_POLL_MINUTES`, avisa de
+Automático: a Donna busca e-mails/agenda a cada `EMAIL_POLL_MINUTES`, avisa de
 novas pendências, manda o briefing às `BRIEFING_HOUR`, o recap às `RECAP_HOUR` e
-a prévia da semana aos domingos. Os botões 👍/👎 ensinam a Dona a priorizar.
+a prévia da semana aos domingos. Os botões 👍/👎 ensinam a Donna a priorizar.
 
 ## Conectar o e-mail do Outlook (Fase 1)
 Escolha um backend em `EMAIL_BACKEND` (`imap`, `graph` ou `both`):
@@ -111,17 +111,17 @@ Escolha um backend em `EMAIL_BACKEND` (`imap`, `graph` ou `both`):
   também os enviados, aponte `IMAP_SENT_FOLDER`.
 - **Microsoft Graph (Plano A):** registre um app (público) no Azure AD com a
   permissão delegada `Mail.Read`, coloque `MS_GRAPH_CLIENT_ID` no `.env`. No
-  primeiro `/sync` a Dona mostra uma URL + código para você autorizar (uma vez);
+  primeiro `/sync` a Donna mostra uma URL + código para você autorizar (uma vez);
   depois renova sozinha. Lê entrada **e** enviados sem encaminhar nada.
 
 ## Conectar o WhatsApp (Fase 3, opcional, somente leitura)
 Módulo opt-in que lê suas mensagens (recebidas e enviadas) no **mesmo número**,
 conectando como aparelho vinculado. **Nunca envia.** Risco de bloqueio baixo,
 mas não oficialmente zero (lib não-oficial). Passo a passo de pareamento em
-[`dona/ingest/whatsapp/README.md`](dona/ingest/whatsapp/README.md). Resumo:
+[`donna/ingest/whatsapp/README.md`](donna/ingest/whatsapp/README.md). Resumo:
 ```bash
 docker compose --profile whatsapp up -d     # sobe núcleo + sidecar
-docker compose logs -f dona-whatsapp        # escaneie o QR (1ª vez)
+docker compose logs -f donna-whatsapp        # escaneie o QR (1ª vez)
 ```
 As mensagens caem no mesmo banco e viram tarefas/pendências como os e-mails.
 
@@ -151,4 +151,4 @@ filtros/redaction podem ser adicionados depois.
 - **Fase 4 — Rascunhos + aprendizado** ✅: respostas/convites com aprovação + feedback.
 - **Fase 5 — Extras** ✅: prep de reunião, recap diário, resumo semanal, captura rápida.
 - **Fase 3 — WhatsApp (opcional)** ✅: leitura via aparelho vinculado (só leitura).
-  Sidecar em `dona/ingest/whatsapp/` (veja o README de lá para parear).
+  Sidecar em `donna/ingest/whatsapp/` (veja o README de lá para parear).

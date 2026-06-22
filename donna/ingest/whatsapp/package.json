@@ -1,8 +1,8 @@
 {
-  "name": "dona-whatsapp",
+  "name": "donna-whatsapp",
   "version": "0.1.0",
   "private": true,
-  "description": "Sidecar somente-leitura que lê o WhatsApp (aparelho vinculado) e grava as mensagens no SQLite da Dona. NUNCA envia.",
+  "description": "Sidecar somente-leitura que lê o WhatsApp (aparelho vinculado) e grava as mensagens no SQLite da Donna. NUNCA envia.",
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
