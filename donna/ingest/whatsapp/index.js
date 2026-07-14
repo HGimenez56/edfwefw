@@ -11,6 +11,7 @@
  */
 
 const path = require('path');
+const fs = require('fs');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const Database = require('better-sqlite3');
@@ -91,10 +92,23 @@ function persist(msg) {
 }
 
 async function start() {
+  // Reset opcional: apaga a sessão para parear do zero. Útil quando o WhatsApp
+  // recusa o pareamento ("couldn't link device") por causa de estado travado.
+  if (process.env.WHATSAPP_RESET === 'true' && fs.existsSync(AUTH_DIR)) {
+    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+    logger.warn('WHATSAPP_RESET=true: sessão apagada; pareando do zero.');
+  }
+
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
   const usePairingCode = !!PAIRING_NUMBER && !state.creds.registered;
+  if (usePairingCode) {
+    logger.info(
+      `Pareando por código para o número terminado em ...${PAIRING_NUMBER.slice(-4)} ` +
+      `(${PAIRING_NUMBER.length} dígitos, com DDI).`
+    );
+  }
 
   const sock = makeWASocket({
     version,
@@ -143,13 +157,14 @@ async function start() {
       logger.info('WhatsApp conectado (somente leitura).');
     }
     if (connection === 'close') {
+      if (pairingTimer) { clearInterval(pairingTimer); pairingTimer = null; }
       const code = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = code === DisconnectReason.loggedOut;
       logger.warn({ code }, 'Conexão fechada.');
       if (!loggedOut) {
-        setTimeout(start, 3000); // reconecta
+        setTimeout(start, 3000); // reconecta (uma nova sessão/código será criada)
       } else {
-        logger.error('Deslogado. Apague a pasta auth/ e pareie de novo.');
+        logger.error('Deslogado. Use WHATSAPP_RESET=true para parear de novo.');
         process.exit(1);
       }
     }

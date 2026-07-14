@@ -72,6 +72,11 @@ services:
         sync: false
       - key: WHATSAPP_AUTH_DIR
         value: /app/data/wa-auth
+      # Coloque "true" por 1 deploy para apagar a sessão e parear do zero
+      # (útil se o WhatsApp recusar com "couldn't link device"). Depois volte
+      # para "false".
+      - key: WHATSAPP_RESET
+        value: "false"
 
     # Guarda o banco SQLite (a "memória" da Donna) entre reinícios.
     disk:
