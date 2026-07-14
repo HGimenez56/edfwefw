@@ -14,6 +14,7 @@ const path = require('path');
 const fs = require('fs');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const Database = require('better-sqlite3');
 const {
   default: makeWASocket,
@@ -39,6 +40,39 @@ const AUTH_DIR = process.env.WHATSAPP_AUTH_DIR
 // CÓDIGO em vez de QR — muito mais fácil em servidor (você lê um código de 8
 // caracteres nos logs e digita no WhatsApp > Aparelhos conectados).
 const PAIRING_NUMBER = (process.env.WHATSAPP_PAIRING_NUMBER || '').replace(/\D/g, '');
+
+// Para enviar o QR como IMAGEM no seu Telegram (muito mais fácil que ler dos
+// logs). Usa o mesmo bot/chat do núcleo.
+const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TG_CHAT = process.env.TELEGRAM_OWNER_CHAT_ID || '';
+let lastQrSentAt = 0;
+
+async function sendQrToTelegram(qrString) {
+  if (!TG_TOKEN || !TG_CHAT) return; // sem bot configurado: cai no QR de log
+  const now = Date.now();
+  if (now - lastQrSentAt < 25000) return; // no máx. 1 envio a cada 25s
+  lastQrSentAt = now;
+  try {
+    const png = await QRCode.toBuffer(qrString, { width: 400, margin: 2 });
+    const form = new FormData();
+    form.append('chat_id', TG_CHAT);
+    form.append(
+      'caption',
+      '📲 Escaneie no WhatsApp > Aparelhos conectados > Conectar um aparelho. ' +
+      'O código muda a cada ~20s; se expirar, envio um novo.'
+    );
+    form.append('photo', new Blob([png], { type: 'image/png' }), 'qr.png');
+    const resp = await fetch(
+      `https://api.telegram.org/bot${TG_TOKEN}/sendPhoto`,
+      { method: 'POST', body: form }
+    );
+    if (!resp.ok) {
+      logger.error({ status: resp.status }, 'Falha ao enviar QR ao Telegram.');
+    }
+  } catch (err) {
+    logger.error({ err }, 'Erro ao gerar/enviar QR ao Telegram.');
+  }
+}
 
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
@@ -149,6 +183,8 @@ async function start() {
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr && !usePairingCode) {
+      // Envia como imagem no Telegram (fácil de escanear) e também no log.
+      sendQrToTelegram(qr);
       console.log('\nEscaneie este QR no WhatsApp > Aparelhos conectados:\n');
       qrcode.generate(qr, { small: true });
     }
