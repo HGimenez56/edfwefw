@@ -423,7 +423,21 @@ class DonnaTelegramBot:
             return
 
         await self._app.bot.send_chat_action(update.effective_chat.id, "typing")
-        reply = self._brain.chat(text)
+        # A chamada ao cérebro roda numa thread (não bloqueia o bot) e é
+        # protegida: se a OpenAI falhar, a Donna avisa o erro em vez de ficar
+        # muda — antes um erro aqui derrubava a resposta silenciosamente.
+        try:
+            reply = await asyncio.to_thread(self._brain.chat, text)
+        except Exception as exc:  # noqa: BLE001 — queremos reportar qualquer erro
+            logger.exception("Erro ao chamar o cérebro (OpenAI).")
+            detail = f"{type(exc).__name__}: {str(exc)[:250]}"
+            reply = (
+                "😕 Tive um problema ao pensar. Costuma ser a conta da OpenAI "
+                "(chave inválida ou sem créditos/billing). Detalhe técnico:\n\n"
+                f"`{detail}`"
+            )
+            await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
+            return
         await update.message.reply_text(reply)
 
     # --- Ciclo de vida -----------------------------------------------------
