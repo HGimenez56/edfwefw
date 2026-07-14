@@ -107,23 +107,29 @@ async function start() {
 
   sock.ev.on('creds.update', saveCreds);
 
-  // Pareamento por CÓDIGO (ideal para servidor/nuvem).
+  // Pareamento por CÓDIGO (ideal para servidor/nuvem). O código expira em ~2
+  // min, então geramos um novo automaticamente a cada 2 min até conectar —
+  // assim você sempre tem um código válido nos logs, sem reiniciar o serviço.
+  let pairingTimer = null;
+  async function askPairingCode() {
+    try {
+      const code = await sock.requestPairingCode(PAIRING_NUMBER);
+      console.log(
+        `\n==================================================\n` +
+        `  CÓDIGO DE PAREAMENTO: ${code}\n` +
+        `  No celular: WhatsApp > Aparelhos conectados >\n` +
+        `  Conectar um aparelho > Conectar com número de telefone\n` +
+        `  e digite o código acima.\n` +
+        `  (vale ~2 min; se expirar, um novo aparece aqui embaixo)\n` +
+        `==================================================\n`
+      );
+    } catch (err) {
+      logger.error({ err }, 'Falha ao gerar código de pareamento.');
+    }
+  }
   if (usePairingCode) {
-    setTimeout(async () => {
-      try {
-        const code = await sock.requestPairingCode(PAIRING_NUMBER);
-        console.log(
-          `\n==================================================\n` +
-          `  CÓDIGO DE PAREAMENTO: ${code}\n` +
-          `  No celular: WhatsApp > Aparelhos conectados >\n` +
-          `  Conectar um aparelho > Conectar com número de telefone\n` +
-          `  e digite o código acima.\n` +
-          `==================================================\n`
-        );
-      } catch (err) {
-        logger.error({ err }, 'Falha ao gerar código de pareamento.');
-      }
-    }, 3000);
+    setTimeout(askPairingCode, 3000);
+    pairingTimer = setInterval(askPairingCode, 120000);
   }
 
   sock.ev.on('connection.update', (update) => {
@@ -133,6 +139,7 @@ async function start() {
       qrcode.generate(qr, { small: true });
     }
     if (connection === 'open') {
+      if (pairingTimer) { clearInterval(pairingTimer); pairingTimer = null; }
       logger.info('WhatsApp conectado (somente leitura).');
     }
     if (connection === 'close') {
