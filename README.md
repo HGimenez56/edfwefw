@@ -7,8 +7,8 @@ briefings e lembretes, e com o tempo prepara rascunhos **sempre pendentes da
 sua aprovação**. O "cérebro" usa a **API da OpenAI** (modelos GPT); a memória
 e o aprendizado ficam no próprio sistema.
 
-> 🚀 **Para colocar a Donna no ar, siga o [GUIA.md](GUIA.md)** — passo a passo do
-> zero ao 24/7 (Telegram, OpenAI, e-mail, agenda, WhatsApp e hospedagem).
+> 🚀 **Colocar no ar sem usar seu PC:** siga o [DEPLOY.md](DEPLOY.md) (deploy pelo
+> navegador, no Render/Railway). Passo a passo completo das conexões no [GUIA.md](GUIA.md).
 
 > Status: **Todas as fases (0–5) implementadas.** A Donna lê e-mails (IMAP e/ou
 > Microsoft Graph), a agenda (ICS) e o WhatsApp (opcional, somente leitura),

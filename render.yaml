@@ -1,0 +1,67 @@
+# Blueprint de deploy da Donna no Render (https://render.com).
+# Como usar (tudo no navegador):
+#   1. New +  ->  Blueprint  ->  conecte este repositório
+#   2. O Render lê este arquivo e cria o serviço automaticamente
+#   3. Ele vai te pedir os valores marcados como "sync: false" (suas chaves)
+#   4. Deploy. Pronto — a Donna roda 24/7.
+#
+# É um "worker" (processo em segundo plano) porque a Donna conversa pelo
+# Telegram via long polling — não precisa de porta/URL pública.
+
+services:
+  - type: worker
+    name: donna
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter          # ~US$7/mês; o menor plano que roda 24/7
+    autoDeploy: true       # redeploy automático a cada push
+    envVars:
+      # --- Obrigatórias (o Render pergunta no painel; ficam secretas) ---
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_OWNER_CHAT_ID
+        sync: false
+
+      # --- Padrões (pode deixar assim) ---
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini          # barato para começar; troque por gpt-4o se quiser
+      - key: DONNA_TIMEZONE
+        value: America/Sao_Paulo
+      - key: DONNA_DB_PATH
+        value: /app/data/donna.db
+      - key: BRIEFING_HOUR
+        value: "7"
+      - key: RECAP_HOUR
+        value: "18"
+      - key: EMAIL_POLL_MINUTES
+        value: "10"
+
+      # --- E-mail (preencha quando fizer o Passo 2; deixe em branco por ora) ---
+      - key: EMAIL_BACKEND
+        value: imap
+      - key: IMAP_HOST
+        sync: false
+      - key: IMAP_PORT
+        value: "993"
+      - key: IMAP_USER
+        sync: false
+      - key: IMAP_PASSWORD
+        sync: false
+      - key: IMAP_SENT_FOLDER
+        sync: false
+      - key: MS_GRAPH_CLIENT_ID
+        sync: false
+      - key: MS_GRAPH_TENANT_ID
+        value: common
+
+      # --- Agenda (Passo 3; deixe em branco por ora) ---
+      - key: CALENDAR_ICS_URL
+        sync: false
+
+    # Guarda o banco SQLite (a "memória" da Donna) entre reinícios.
+    disk:
+      name: donna-data
+      mountPath: /app/data
+      sizeGB: 1
