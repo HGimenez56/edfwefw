@@ -67,6 +67,7 @@ class DonnaTelegramBot:
         self._app.add_handler(CommandHandler("recap", self._cmd_recap))
         self._app.add_handler(CommandHandler("semana", self._cmd_week))
         self._app.add_handler(CommandHandler("prep", self._cmd_prep))
+        self._app.add_handler(CommandHandler("diag", self._cmd_diag))
         self._app.add_handler(CallbackQueryHandler(self._on_callback))
         self._app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text)
@@ -403,6 +404,43 @@ class DonnaTelegramBot:
         await self._send_owner(
             extras_skill.build_daily_recap(self._storage, self._settings.timezone)
         )
+
+    # --- Diagnóstico -------------------------------------------------------
+    async def _cmd_diag(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Testa a conexão com a OpenAI e mostra o que está (ou não) pronto."""
+        if not self._is_owner(update):
+            return
+        s = self._settings
+        key = s.openai_api_key or ""
+        if not key:
+            masked = "(VAZIA — não configurada)"
+        elif len(key) < 12:
+            masked = f"(muito curta: {len(key)} chars)"
+        else:
+            masked = f"{key[:7]}…{key[-4:]}"
+        status = (
+            "🔧 *Diagnóstico da Donna*\n"
+            f"• OpenAI key: `{masked}` (len={len(key)})\n"
+            f"• Modelo: `{s.openai_model}`\n"
+            f"• Cérebro pronto: {self._brain.ready}\n"
+            f"• E-mail: {s.email_ready} | Agenda: {s.calendar_ready} | "
+            f"WhatsApp: {s.whatsapp_enabled}"
+        )
+        await update.message.reply_text(status, parse_mode=ParseMode.MARKDOWN)
+
+        await self._app.bot.send_chat_action(update.effective_chat.id, "typing")
+        try:
+            reply = await asyncio.to_thread(
+                self._brain.chat, "Responda apenas com a palavra: ok"
+            )
+            await update.message.reply_text(f"✅ OpenAI respondeu: {reply[:120]}")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Diagnóstico: falha na OpenAI.")
+            await update.message.reply_text(
+                "❌ OpenAI falhou:\n"
+                f"`{type(exc).__name__}: {str(exc)[:400]}`",
+                parse_mode=ParseMode.MARKDOWN,
+            )
 
     # --- Conversa livre ----------------------------------------------------
     async def _on_text(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
