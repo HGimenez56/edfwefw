@@ -20,7 +20,7 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-} = require('@whiskeysockets/baileys');
+} = require('baileys');
 
 const logger = pino({ level: process.env.DONNA_LOG_LEVEL?.toLowerCase() || 'info' });
 
