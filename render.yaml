@@ -12,7 +12,9 @@ services:
   - type: worker
     name: donna
     runtime: docker
-    dockerfilePath: ./Dockerfile
+    # Imagem combinada (núcleo + WhatsApp opcional no mesmo serviço, para
+    # compartilharem o disco). O WhatsApp só sobe se WHATSAPP_ENABLED=true.
+    dockerfilePath: ./Dockerfile.combined
     plan: starter          # ~US$7/mês; o menor plano que roda 24/7
     autoDeploy: true       # redeploy automático a cada push
     envVars:
@@ -59,6 +61,17 @@ services:
       # --- Agenda (Passo 3; deixe em branco por ora) ---
       - key: CALENDAR_ICS_URL
         sync: false
+
+      # --- WhatsApp (opcional, somente leitura) ---
+      # Para ligar: mude WHATSAPP_ENABLED para "true" e preencha
+      # WHATSAPP_PAIRING_NUMBER com seu número (só dígitos, com DDI,
+      # ex.: 5511999998888). A sessão é salva no disco persistente.
+      - key: WHATSAPP_ENABLED
+        value: "false"
+      - key: WHATSAPP_PAIRING_NUMBER
+        sync: false
+      - key: WHATSAPP_AUTH_DIR
+        value: /app/data/wa-auth
 
     # Guarda o banco SQLite (a "memória" da Donna) entre reinícios.
     disk:

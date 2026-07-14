@@ -28,7 +28,16 @@ const DB_PATH = process.env.DONNA_DB_PATH
   ? path.resolve(process.env.DONNA_DB_PATH)
   : path.resolve(__dirname, '../../../data/donna.db');
 
-const AUTH_DIR = path.join(__dirname, 'auth');
+// Pasta da sessão. Na nuvem, aponte para o disco persistente (ex.:
+// /app/data/wa-auth) via WHATSAPP_AUTH_DIR para não perder o pareamento.
+const AUTH_DIR = process.env.WHATSAPP_AUTH_DIR
+  ? path.resolve(process.env.WHATSAPP_AUTH_DIR)
+  : path.join(__dirname, 'auth');
+
+// Se definido (só dígitos, com DDI, ex.: 5511999998888), a Donna pareia por
+// CÓDIGO em vez de QR — muito mais fácil em servidor (você lê um código de 8
+// caracteres nos logs e digita no WhatsApp > Aparelhos conectados).
+const PAIRING_NUMBER = (process.env.WHATSAPP_PAIRING_NUMBER || '').replace(/\D/g, '');
 
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
@@ -85,18 +94,41 @@ async function start() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
+  const usePairingCode = !!PAIRING_NUMBER && !state.creds.registered;
+
   const sock = makeWASocket({
     version,
     auth: state,
+    // Com código de pareamento não imprimimos QR.
+    printQRInTerminal: false,
     logger: pino({ level: 'silent' }),
     markOnlineOnConnect: false, // não altera seu status; leitura passiva
   });
 
   sock.ev.on('creds.update', saveCreds);
 
+  // Pareamento por CÓDIGO (ideal para servidor/nuvem).
+  if (usePairingCode) {
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(PAIRING_NUMBER);
+        console.log(
+          `\n==================================================\n` +
+          `  CÓDIGO DE PAREAMENTO: ${code}\n` +
+          `  No celular: WhatsApp > Aparelhos conectados >\n` +
+          `  Conectar um aparelho > Conectar com número de telefone\n` +
+          `  e digite o código acima.\n` +
+          `==================================================\n`
+        );
+      } catch (err) {
+        logger.error({ err }, 'Falha ao gerar código de pareamento.');
+      }
+    }, 3000);
+  }
+
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
-    if (qr) {
+    if (qr && !usePairingCode) {
       console.log('\nEscaneie este QR no WhatsApp > Aparelhos conectados:\n');
       qrcode.generate(qr, { small: true });
     }

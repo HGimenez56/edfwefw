@@ -59,7 +59,26 @@ funcionando! Use `/ajuda` para ver tudo.
 - Render worker (menor plano): ~US$7/mês. Railway: ~US$5/mês (uso).
 - OpenAI com `gpt-4o-mini`: normalmente menos de US$1–2/mês para uso pessoal.
 
-## Observação sobre o WhatsApp
-O WhatsApp (opcional) precisa escanear um QR e é um segundo serviço — dá para
-adicionar depois, com calma. Comece pelo núcleo (Telegram + e-mail); o WhatsApp
-entra quando você quiser.
+## Ligar o WhatsApp (opcional, somente leitura)
+Funciona no mesmo serviço do Render (a imagem já sobe o leitor junto quando você
+ativa). O pareamento é por **código** — não precisa escanear QR.
+
+> ⚠️ Mesmo número, **só leitura** (recebidas + enviadas), **nunca envia**. Usa
+> biblioteca não-oficial: risco de bloqueio baixo para uso pessoal/passivo, mas
+> não oficialmente zero.
+
+1. No Render, serviço **donna** → **Environment**, ajuste:
+   - `WHATSAPP_ENABLED` → `true`
+   - `WHATSAPP_PAIRING_NUMBER` → seu número **só com dígitos e com DDI**
+     (ex.: `5511999998888`)
+   - (`WHATSAPP_AUTH_DIR` já vem como `/app/data/wa-auth` — não mexa)
+2. **Save** (ele reinicia). Abra a aba **Logs** e aguarde aparecer:
+   ```
+   CÓDIGO DE PAREAMENTO: XXXX-XXXX
+   ```
+3. No celular: **WhatsApp → Aparelhos conectados → Conectar um aparelho →
+   Conectar com número de telefone** → digite esse código.
+4. Pronto. As mensagens passam a virar tarefas/pendências (veja em `/tarefas`).
+   A sessão fica salva no disco, então sobrevive a reinícios.
+
+Para desligar: volte `WHATSAPP_ENABLED` para `false` e salve.

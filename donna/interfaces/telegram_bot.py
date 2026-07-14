@@ -90,6 +90,17 @@ class DonnaTelegramBot:
         else:
             logger.info("Nenhum backend de e-mail configurado; poll desativado.")
 
+        # Processamento de mensagens (extração) roda com QUALQUER fonte — e-mail
+        # ou WhatsApp. Fica separado da busca de e-mail de propósito, para
+        # também processar o que o sidecar de WhatsApp grava no banco.
+        if self._brain.ready:
+            jq.run_repeating(
+                self._job_process_messages,
+                interval=self._settings.email_poll_minutes * 60,
+                first=45,
+                name="process_messages",
+            )
+
         if self._settings.calendar_ready:
             jq.run_repeating(
                 self._job_poll_calendar,
@@ -308,25 +319,26 @@ class DonnaTelegramBot:
     async def _cmd_sync(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._is_owner(update):
             return
-        if not self._settings.email_ready:
-            await update.message.reply_text(
-                "Nenhum backend de e-mail configurado ainda. Veja o .env."
-            )
-            return
-        await update.message.reply_text("🔄 Buscando e-mails...")
+        await update.message.reply_text("🔄 Buscando mensagens...")
         new, res = await self._sync_and_extract()
+        fonte = f"{new} e-mail(s) novo(s). " if self._settings.email_ready else ""
         await update.message.reply_text(
-            f"✅ {new} e-mail(s) novo(s). "
-            f"{res.tasks_created} tarefa(s), {res.commitments_created} "
+            f"✅ {fonte}{res.tasks_created} tarefa(s), {res.commitments_created} "
             f"pendência(s), {res.resolved} resolvida(s)."
         )
 
     # --- Ações compartilhadas ---------------------------------------------
     async def _sync_and_extract(self):
-        """Busca e-mails + calendário (em thread) e roda a extração."""
-        new = await asyncio.to_thread(
-            email_ingest.sync_emails, self._settings, self._storage
-        )
+        """Busca fontes (e-mail/calendário, se houver) e roda a extração.
+
+        A extração processa mensagens de QUALQUER fonte no banco — inclusive as
+        que o sidecar de WhatsApp grava — então funciona mesmo sem e-mail.
+        """
+        new = 0
+        if self._settings.email_ready:
+            new = await asyncio.to_thread(
+                email_ingest.sync_emails, self._settings, self._storage
+            )
         if self._settings.calendar_ready:
             try:
                 await asyncio.to_thread(
@@ -351,12 +363,22 @@ class DonnaTelegramBot:
 
     # --- Jobs agendados ----------------------------------------------------
     async def _job_poll_email(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        new, result = await self._sync_and_extract()
+        """Só busca e-mails novos; a extração fica no job de processamento."""
+        try:
+            await asyncio.to_thread(
+                email_ingest.sync_emails, self._settings, self._storage
+            )
+        except Exception as exc:
+            logger.error("Falha ao buscar e-mails: %s", exc)
+
+    async def _job_process_messages(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Processa mensagens não-lidas de qualquer fonte (e-mail, WhatsApp)."""
+        result = await asyncio.to_thread(extraction.run, self._storage, self._brain)
         # Avisa de forma enxuta só quando surge algo que precisa de resposta.
         if result.commitments_created:
             await self._send_owner(
-                f"🔔 {result.commitments_created} nova(s) pendência(s) na sua "
-                "caixa. Use /pendencias para ver."
+                f"🔔 {result.commitments_created} nova(s) pendência(s). "
+                "Use /pendencias para ver."
             )
 
     async def _job_poll_calendar(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:

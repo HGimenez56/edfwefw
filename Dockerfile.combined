@@ -1,0 +1,28 @@
+# Imagem combinada: núcleo Python + sidecar de WhatsApp (Node) no mesmo
+# container, para hospedagens onde os dois precisam compartilhar o mesmo disco
+# (ex.: Render). O WhatsApp só sobe se WHATSAPP_ENABLED=true (ver start.sh).
+FROM node:20-slim
+
+# Python + toolchain para os bindings nativos do better-sqlite3.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Dependências Python (camada cacheável).
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
+# Código do núcleo.
+COPY donna ./donna
+COPY start.sh .
+RUN chmod +x start.sh
+
+# Dependências do sidecar de WhatsApp.
+RUN cd donna/ingest/whatsapp && npm install --omit=dev
+
+# Banco SQLite e sessão do WhatsApp ficam no volume montado aqui.
+VOLUME ["/app/data"]
+
+CMD ["./start.sh"]
