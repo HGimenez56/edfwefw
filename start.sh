@@ -3,9 +3,9 @@
 # (somente leitura) no MESMO container, compartilhando o banco em /app/data.
 set -e
 
-# Pausa temporária do WhatsApp controlada por código (o dono está em reunião e
-# pediu para parar os QRs). Para RETOMAR: mude para "false" e faça push.
-WHATSAPP_PAUSE="true"
+# Pausa temporária do WhatsApp controlada por código. Para PAUSAR os QRs:
+# mude para "true" e faça push. "false" = WhatsApp ativo normalmente.
+WHATSAPP_PAUSE="false"
 
 if [ "$WHATSAPP_ENABLED" = "true" ] && [ "$WHATSAPP_PAUSE" != "true" ]; then
   echo "[start] WhatsApp habilitado — subindo o sidecar (somente leitura)..."
