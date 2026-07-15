@@ -48,7 +48,14 @@ class Brain:
         self._storage = storage
         self._client: Optional[OpenAI] = None
         if settings.openai_api_key:
-            self._client = OpenAI(api_key=settings.openai_api_key)
+            # Timeout curto e 1 retry: se a chamada travar (rede/proxy), o erro
+            # aparece em ~30s em vez de pendurar por padrão (10min + retries),
+            # o que deixava a Donna "muda" sem nunca reportar o problema.
+            self._client = OpenAI(
+                api_key=settings.openai_api_key,
+                timeout=30.0,
+                max_retries=1,
+            )
         else:
             logger.warning(
                 "OPENAI_API_KEY ausente — o cérebro responderá em modo stub."

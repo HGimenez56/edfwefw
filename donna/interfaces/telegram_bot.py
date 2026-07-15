@@ -436,10 +436,10 @@ class DonnaTelegramBot:
             await update.message.reply_text(f"✅ OpenAI respondeu: {reply[:120]}")
         except Exception as exc:  # noqa: BLE001
             logger.exception("Diagnóstico: falha na OpenAI.")
+            # Sem parse_mode: o texto do erro pode ter caracteres que quebram
+            # o Markdown do Telegram e fariam ESTA mensagem sumir também.
             await update.message.reply_text(
-                "❌ OpenAI falhou:\n"
-                f"`{type(exc).__name__}: {str(exc)[:400]}`",
-                parse_mode=ParseMode.MARKDOWN,
+                f"❌ OpenAI falhou:\n{type(exc).__name__}: {str(exc)[:400]}"
             )
 
     # --- Conversa livre ----------------------------------------------------
@@ -468,13 +468,11 @@ class DonnaTelegramBot:
             reply = await asyncio.to_thread(self._brain.chat, text)
         except Exception as exc:  # noqa: BLE001 — queremos reportar qualquer erro
             logger.exception("Erro ao chamar o cérebro (OpenAI).")
-            detail = f"{type(exc).__name__}: {str(exc)[:250]}"
-            reply = (
-                "😕 Tive um problema ao pensar. Costuma ser a conta da OpenAI "
-                "(chave inválida ou sem créditos/billing). Detalhe técnico:\n\n"
-                f"`{detail}`"
+            # Sem parse_mode: erro pode conter caracteres que quebram Markdown.
+            await update.message.reply_text(
+                "😕 Tive um problema ao pensar. Detalhe técnico:\n"
+                f"{type(exc).__name__}: {str(exc)[:250]}"
             )
-            await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
             return
         await update.message.reply_text(reply)
 
