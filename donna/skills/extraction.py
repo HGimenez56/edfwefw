@@ -67,6 +67,10 @@ for acionável e responda APENAS em JSON com este formato exato:
 }}
 
 Regras:
+- Você recebe a CONVERSA (contexto anterior + mensagens novas). Um pedido
+  pode estar QUEBRADO em várias mensagens ("consegue me mandar" / "aquela
+  proposta" / "até sexta?"): junte os fragmentos e extraia itens
+  CONSOLIDADOS — nunca um item por fragmento, nem duplicados do contexto.
 - Conversa INDIVIDUAL recebida (direction=in) que pede ação/resposta do dono:
   gere um commitment "awaiting_my_reply".
 {group_rule}- Se foi ENVIADA por você (direction=out) e você prometeu algo, gere
@@ -123,60 +127,102 @@ def _resolve_pending(storage: Storage, recipient: str) -> int:
     return resolved
 
 
+def _conversation_key(row) -> tuple[str, str, str]:
+    """Identifica a conversa de uma mensagem: (source, tipo, chave)."""
+    subject = row["subject"] or ""
+    if subject.startswith("[grupo]"):
+        return (row["source"], "group", subject.split()[-1])
+    counterpart = (
+        row["sender"] if row["direction"] == "in" else row["recipient"]
+    ) or ""
+    return (row["source"], "direct", counterpart.lower())
+
+
+def _build_conversation_content(storage: Storage, rows: list) -> str:
+    """Monta o conteúdo de uma conversa: contexto anterior + mensagens novas.
+
+    Pedidos chegam quebrados em várias mensagens ("consegue me mandar" /
+    "aquela proposta" / "até sexta?") — por isso a extração vê a conversa
+    inteira, não mensagens isoladas.
+    """
+    first = rows[0]
+    source, kind, key = _conversation_key(first)
+    history = storage.conversation_history(
+        source,
+        group_key=key if kind == "group" else None,
+        contact=key if kind == "direct" else None,
+        before_id=first["id"],
+        limit=6,
+    )
+    parts: list[str] = []
+    if history:
+        parts.append("CONTEXTO (mensagens anteriores da mesma conversa):")
+        for h in history:
+            parts.append(f"  [{h['direction']}] {h['sender']}: {(h['body'] or '')[:400]}")
+        parts.append("")
+    parts.append("MENSAGENS NOVAS (analise o conjunto, em ordem):")
+    parts.append(_format_message(first))
+    for row in rows[1:]:
+        parts.append(f"[{row['direction']}] {row['sender']}: {row['body']}")
+    return "\n".join(parts)
+
+
 def run(
     storage: Storage,
     brain: Brain,
     limit: int = 50,
     owner_names: str = "",
 ) -> ExtractionResult:
-    """Processa mensagens não-lidas e popula tarefas/pendências."""
+    """Processa mensagens não-lidas, agrupadas por conversa."""
     result = ExtractionResult()
     instruction = build_instruction(owner_names)
     messages = storage.unprocessed_messages(limit=limit)
     processed_ids: list[int] = []
 
+    # Agrupa por conversa preservando a ordem: um pedido quebrado em várias
+    # mensagens vira UMA análise (e evita tarefas duplicadas por fragmento).
+    conversations: dict[tuple, list] = {}
     for row in messages:
-        msg_id = row["id"]
-        processed_ids.append(msg_id)
+        processed_ids.append(row["id"])
         result.processed += 1
-
-        # E-mails enviados podem resolver pendências antigas.
         if row["direction"] == "out":
             result.resolved += _resolve_pending(storage, row["recipient"] or "")
+        conversations.setdefault(_conversation_key(row), []).append(row)
 
-        if not brain.ready:
-            continue  # modo stub: só marca processado
-
-        data = brain.extract_json(instruction, _format_message(row))
-        if not isinstance(data, dict):
-            continue
-
-        category = data.get("category")
-        for t in data.get("tasks", []) or []:
-            if not t.get("title"):
+    if brain.ready:
+        for rows in conversations.values():
+            anchor_id = rows[-1]["id"]  # 🔎 Original aponta pra última msg
+            content = _build_conversation_content(storage, rows)
+            data = brain.extract_json(instruction, content)
+            if not isinstance(data, dict):
                 continue
-            storage.add_task(
-                title=str(t["title"])[:200],
-                details=t.get("details"),
-                category=category,
-                priority=int(t.get("priority") or 3),
-                due_at=t.get("due_at") or None,
-                source_msg_id=msg_id,
-            )
-            result.tasks_created += 1
 
-        for c in data.get("commitments", []) or []:
-            kind = c.get("kind")
-            if kind not in _VALID_KINDS or not c.get("summary"):
-                continue
-            storage.add_commitment(
-                kind=kind,
-                summary=str(c["summary"])[:300],
-                who=c.get("who"),
-                category=category,
-                source_msg_id=msg_id,
-            )
-            result.commitments_created += 1
+            category = data.get("category")
+            for t in data.get("tasks", []) or []:
+                if not t.get("title"):
+                    continue
+                storage.add_task(
+                    title=str(t["title"])[:200],
+                    details=t.get("details"),
+                    category=category,
+                    priority=int(t.get("priority") or 3),
+                    due_at=t.get("due_at") or None,
+                    source_msg_id=anchor_id,
+                )
+                result.tasks_created += 1
+
+            for c in data.get("commitments", []) or []:
+                kind = c.get("kind")
+                if kind not in _VALID_KINDS or not c.get("summary"):
+                    continue
+                storage.add_commitment(
+                    kind=kind,
+                    summary=str(c["summary"])[:300],
+                    who=c.get("who"),
+                    category=category,
+                    source_msg_id=anchor_id,
+                )
+                result.commitments_created += 1
 
     storage.mark_processed(processed_ids)
     if result.processed:

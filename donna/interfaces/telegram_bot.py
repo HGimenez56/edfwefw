@@ -212,12 +212,17 @@ class DonnaTelegramBot:
         await update.message.reply_text("📋 *Tarefas em aberto*", parse_mode=ParseMode.MARKDOWN)
         for t in tasks:
             due = f"\n⏰ {t['due_at']}" if t["due_at"] else ""
-            keyboard = InlineKeyboardMarkup([[
+            buttons = [
                 InlineKeyboardButton("✅ Feito", callback_data=f"t|done|{t['id']}"),
                 InlineKeyboardButton("👍", callback_data=f"t|important|{t['id']}"),
                 InlineKeyboardButton("👎", callback_data=f"t|ignore|{t['id']}"),
                 InlineKeyboardButton("⏰", callback_data=f"t|snooze|{t['id']}"),
-            ]])
+            ]
+            if t["source_msg_id"]:
+                buttons.append(
+                    InlineKeyboardButton("🔎", callback_data=f"t|orig|{t['id']}")
+                )
+            keyboard = InlineKeyboardMarkup([buttons])
             await update.message.reply_text(
                 f"[P{t['priority']}] {t['title']}{due}", reply_markup=keyboard
             )
@@ -308,24 +313,15 @@ class DonnaTelegramBot:
         except ValueError:
             return
 
-        if domain == "c" and signal == "orig":
+        if signal == "orig" and domain in ("c", "t"):
             # Mostra o pedido original ipsis litteris, sem mexer no card.
-            commitment = self._storage.get_commitment(item_id)
-            source = (
-                self._storage.get_message(commitment["source_msg_id"])
-                if commitment and commitment["source_msg_id"]
-                else None
+            item = (
+                self._storage.get_commitment(item_id)
+                if domain == "c"
+                else self._storage.get_task(item_id)
             )
-            if source is None:
-                await query.message.reply_text(
-                    "Não encontrei a mensagem original desta pendência."
-                )
-                return
-            origem = source["subject"] or source["sender"] or source["source"]
-            await query.message.reply_text(
-                f"🔎 Mensagem original ({source['source']} — {origem}, "
-                f"de {source['sender']}):\n\n“{(source['body'] or '')[:1500]}”"
-            )
+            source_id = item["source_msg_id"] if item else None
+            await self._send_original(query, source_id)
             return
 
         if domain == "t":
@@ -346,6 +342,41 @@ class DonnaTelegramBot:
         # getattr: em botões antigos o Telegram pode não entregar o texto.
         original = getattr(query.message, "text", None) or ""
         await query.edit_message_text(f"{original}\n\n— {msg}")
+
+    async def _send_original(self, query, source_id) -> None:
+        """Mostra a(s) mensagem(ns) original(is) de uma tarefa/pendência.
+
+        Inclui até 3 mensagens anteriores da mesma conversa — pedidos muitas
+        vezes chegam quebrados em vários balões.
+        """
+        source = self._storage.get_message(source_id) if source_id else None
+        if source is None:
+            await query.message.reply_text(
+                "Não encontrei a mensagem original deste item."
+            )
+            return
+        subject = source["subject"] or ""
+        if subject.startswith("[grupo]"):
+            history = self._storage.conversation_history(
+                source["source"], group_key=subject.split()[-1],
+                before_id=source["id"], limit=3,
+            )
+            origem = f"grupo ({subject})"
+        else:
+            contact = (
+                source["sender"] if source["direction"] == "in"
+                else source["recipient"]
+            ) or ""
+            history = self._storage.conversation_history(
+                source["source"], contact=contact,
+                before_id=source["id"], limit=3,
+            ) if contact else []
+            origem = contact or source["source"]
+        lines = [f"🔎 Conversa original ({source['source']} — {origem}):", ""]
+        for h in history:
+            lines.append(f"{h['sender']}: “{(h['body'] or '')[:300]}”")
+        lines.append(f"{source['sender']}: “{(source['body'] or '')[:1200]}”")
+        await query.message.reply_text("\n".join(lines))
 
     async def _cmd_note(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """/nota <texto> → captura rápida: vira uma tarefa."""

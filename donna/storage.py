@@ -245,6 +245,40 @@ class Storage:
             ).fetchall()
         return list(reversed(rows))
 
+    def conversation_history(
+        self,
+        source: str,
+        *,
+        group_key: Optional[str] = None,
+        contact: Optional[str] = None,
+        before_id: int = 0,
+        limit: int = 6,
+    ) -> list[sqlite3.Row]:
+        """Mensagens anteriores da MESMA conversa (grupo ou contato).
+
+        Usado pela extração para entender pedidos quebrados em várias
+        mensagens. Retorna em ordem cronológica.
+        """
+        with self._connect() as conn:
+            if group_key:
+                rows = conn.execute(
+                    "SELECT * FROM messages WHERE source = ? "
+                    "AND subject LIKE ? AND id < ? "
+                    "ORDER BY id DESC LIMIT ?",
+                    (source, f"%{group_key}%", before_id, limit),
+                ).fetchall()
+            elif contact:
+                like = f"%{contact}%"
+                rows = conn.execute(
+                    "SELECT * FROM messages WHERE source = ? "
+                    "AND (sender LIKE ? OR recipient LIKE ?) AND id < ? "
+                    "ORDER BY id DESC LIMIT ?",
+                    (source, like, like, before_id, limit),
+                ).fetchall()
+            else:
+                rows = []
+        return list(reversed(rows))
+
     def unprocessed_messages(self, limit: int = 50) -> list[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(

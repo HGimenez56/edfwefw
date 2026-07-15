@@ -74,3 +74,50 @@ def test_individual_whatsapp_is_flagged_individual(tmp_path: Path) -> None:
     brain = CapturingBrain()
     extraction.run(store, brain)
     assert "conversa INDIVIDUAL" in brain.contents[0]
+
+
+def test_broken_request_same_sender_is_one_analysis(tmp_path: Path) -> None:
+    # Pedido quebrado em 3 balões → UMA análise consolidada, não três.
+    store = Storage(tmp_path / "t.db")
+    for i, body in enumerate(
+        ["consegue me mandar", "aquela proposta da Acme", "até sexta?"]
+    ):
+        store.add_message(
+            source="whatsapp", direction="in", external_id=f"b{i}",
+            sender="Cliente X", recipient="me", body=body,
+        )
+    brain = CapturingBrain()
+    extraction.run(store, brain)
+    assert len(brain.contents) == 1  # uma chamada só
+    assert "consegue me mandar" in brain.contents[0]
+    assert "aquela proposta da Acme" in brain.contents[0]
+    assert "até sexta?" in brain.contents[0]
+    assert "QUEBRADO" in brain.instructions[0]  # regra no prompt
+
+
+def test_different_senders_are_separate_analyses(tmp_path: Path) -> None:
+    store = Storage(tmp_path / "t.db")
+    store.add_message(source="whatsapp", direction="in", external_id="s1",
+                      sender="Ana", recipient="me", body="oi")
+    store.add_message(source="whatsapp", direction="in", external_id="s2",
+                      sender="Beto", recipient="me", body="olá")
+    brain = CapturingBrain()
+    extraction.run(store, brain)
+    assert len(brain.contents) == 2
+
+
+def test_prior_conversation_appears_as_context(tmp_path: Path) -> None:
+    store = Storage(tmp_path / "t.db")
+    mid = store.add_message(
+        source="whatsapp", direction="in", external_id="old1",
+        sender="Cliente X", recipient="me", body="sobre o contrato da filial",
+    )
+    store.mark_processed([mid])
+    store.add_message(
+        source="whatsapp", direction="in", external_id="new1",
+        sender="Cliente X", recipient="me", body="consegue revisar até amanhã?",
+    )
+    brain = CapturingBrain()
+    extraction.run(store, brain)
+    assert "CONTEXTO" in brain.contents[0]
+    assert "sobre o contrato da filial" in brain.contents[0]
