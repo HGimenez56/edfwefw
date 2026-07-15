@@ -212,6 +212,39 @@ class Storage:
                 "SELECT * FROM messages WHERE id = ?", (message_id,)
             ).fetchone()
 
+    def log_chat(self, direction: str, body: str) -> None:
+        """Guarda um turno da conversa com o dono (source='telegram').
+
+        Entra já com processed=1 para a extração de tarefas NÃO tratar a
+        conversa com a Donna como se fosse e-mail/WhatsApp.
+        """
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO messages
+                  (source, direction, sender, recipient, body,
+                   ingested_at, processed)
+                VALUES ('telegram', ?, ?, ?, ?, ?, 1)
+                """,
+                (
+                    direction,
+                    "owner" if direction == "in" else "donna",
+                    "donna" if direction == "in" else "owner",
+                    body[:4000],
+                    _now_iso(),
+                ),
+            )
+
+    def recent_chat(self, limit: int = 12) -> list[sqlite3.Row]:
+        """Últimos turnos da conversa (mais antigos primeiro)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM messages WHERE source = 'telegram' "
+                "ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return list(reversed(rows))
+
     def unprocessed_messages(self, limit: int = 50) -> list[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(

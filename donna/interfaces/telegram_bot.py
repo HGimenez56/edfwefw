@@ -34,6 +34,7 @@ from ..config import Settings
 from ..ingest import calendar as calendar_ingest
 from ..ingest import email as email_ingest
 from ..skills import agenda as agenda_skill
+from ..skills import assistant as assistant_skill
 from ..skills import briefing as briefing_skill
 from ..skills import drafts as drafts_skill
 from ..skills import extraction
@@ -82,6 +83,7 @@ class DonnaTelegramBot:
         self._app.add_handler(CommandHandler("recap", self._cmd_recap))
         self._app.add_handler(CommandHandler("semana", self._cmd_week))
         self._app.add_handler(CommandHandler("prep", self._cmd_prep))
+        self._app.add_handler(CommandHandler("perfil", self._cmd_profile))
         self._app.add_handler(CommandHandler("diag", self._cmd_diag))
         self._app.add_handler(CallbackQueryHandler(self._on_callback))
         self._app.add_handler(
@@ -192,7 +194,8 @@ class DonnaTelegramBot:
             "• /nota <texto> — captura rápida (vira tarefa). Encaminhar também vale.\n"
             "• /prep — preparação para sua próxima reunião.\n"
             "• /recap — recap do dia + agenda de amanhã.\n"
-            "• /semana — o que você entregou na semana.\n\n"
+            "• /semana — o que você entregou na semana.\n"
+            "• /perfil <fato> — me ensine sobre você (uso em tudo).\n\n"
             "Automático: leio seus e-mails/agenda, te aviso de novas pendências, "
             "mando o briefing de manhã e o recap à noite. Seus 👍/👎 me ensinam "
             "o que priorizar.\n"
@@ -441,6 +444,32 @@ class DonnaTelegramBot:
             extras_skill.build_daily_recap(self._storage, self._settings.timezone)
         )
 
+    async def _cmd_profile(
+        self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """/perfil — mostra a memória de longo prazo; /perfil <texto> adiciona.
+
+        O perfil é injetado em TODA conversa/extração: é como a Donna aprende
+        quem você é, o que priorizar e como falar com você.
+        """
+        if not self._is_owner(update):
+            return
+        text = (update.message.text or "").partition(" ")[2].strip()
+        if not text:
+            profile = self._storage.get_profile().strip()
+            await update.message.reply_text(
+                ("🧠 O que eu sei sobre você:\n\n" + profile)
+                if profile
+                else "🧠 Meu perfil sobre você ainda está vazio. Me ensine com "
+                     "/perfil <fato> — ex.: /perfil Priorize e-mails do cliente Acme."
+            )
+            return
+        current = self._storage.get_profile().strip()
+        self._storage.set_profile((current + "\n- " + text).strip())
+        await update.message.reply_text(
+            "🧠 Anotado! Vou levar isso em conta daqui pra frente."
+        )
+
     # --- Diagnóstico -------------------------------------------------------
     async def _cmd_diag(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Testa a conexão com a OpenAI e mostra o que está (ou não) pronto."""
@@ -508,11 +537,17 @@ class DonnaTelegramBot:
             return
 
         await self._app.bot.send_chat_action(update.effective_chat.id, "typing")
-        # A chamada ao cérebro roda numa thread (não bloqueia o bot) e é
-        # protegida: se a OpenAI falhar, a Donna avisa o erro em vez de ficar
-        # muda — antes um erro aqui derrubava a resposta silenciosamente.
+        # Conversa integrada: injeta tarefas/pendências/agenda REAIS + o
+        # histórico recente (skills.assistant), rodando numa thread. Se a
+        # OpenAI falhar, a Donna avisa o erro em vez de ficar muda.
         try:
-            reply = await asyncio.to_thread(self._brain.chat, text)
+            reply = await asyncio.to_thread(
+                assistant_skill.converse,
+                self._storage,
+                self._brain,
+                self._settings.timezone,
+                text,
+            )
         except Exception as exc:  # noqa: BLE001 — queremos reportar qualquer erro
             logger.exception("Erro ao chamar o cérebro (OpenAI).")
             # Sem parse_mode: erro pode conter caracteres que quebram Markdown.

@@ -37,6 +37,10 @@ rascunhos. Princípios:
   externa é apenas um rascunho que depende da aprovação final do dono.
 - Separe contexto de trabalho e pessoal, mas cuide dos dois.
 - Quando não tiver certeza, diga o que assumiu em vez de inventar.
+- Você recebe um bloco "DADOS ATUAIS" com as tarefas, pendências e agenda
+  REAIS do dono. Responda SEMPRE com base nesses dados. Se algo não estiver
+  lá, diga que não encontrou — NUNCA invente tarefas, pendências, nomes ou
+  compromissos que não existam nos dados.
 """
 
 
@@ -97,6 +101,45 @@ class Brain:
                 {"role": "system", "content": self.system_prompt()},
                 {"role": "user", "content": user_message},
             ],
+        )
+        return (resp.choices[0].message.content or "").strip()
+
+    def converse(
+        self,
+        user_message: str,
+        *,
+        context: str = "",
+        history: Optional[list[tuple[str, str]]] = None,
+        temperature: float = 0.3,
+    ) -> str:
+        """Conversa com estado: injeta os DADOS REAIS e o histórico recente.
+
+        `context` é o bloco "DADOS ATUAIS" (tarefas/pendências/agenda vindas
+        do banco). `history` são os últimos turnos [(papel, texto)], com papel
+        'user' ou 'assistant'. É isso que impede o modelo de inventar dados e
+        o faz lembrar do que acabou de ser dito.
+        """
+        if not self._client:
+            return (
+                "⚠️ Cérebro em modo stub (sem OPENAI_API_KEY). "
+                f"Você disse: {user_message!r}"
+            )
+        messages: list[dict] = [
+            {"role": "system", "content": self.system_prompt()},
+        ]
+        if context:
+            messages.append(
+                {"role": "system", "content": f"DADOS ATUAIS:\n{context}"}
+            )
+        for role, text in history or []:
+            if role in ("user", "assistant") and text:
+                messages.append({"role": role, "content": text})
+        messages.append({"role": "user", "content": user_message})
+
+        resp = self._client.chat.completions.create(
+            model=self._settings.openai_model,
+            temperature=temperature,
+            messages=messages,
         )
         return (resp.choices[0].message.content or "").strip()
 
