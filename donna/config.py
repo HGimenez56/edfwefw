@@ -52,7 +52,10 @@ class Settings(BaseSettings):
     recap_hour: int = Field(default=18, alias="RECAP_HOUR")
     # Nomes pelos quais o dono é chamado (separados por vírgula). Em GRUPOS,
     # só vira pendência do dono se a mensagem chamar um desses nomes.
-    owner_names: str = Field(default="", alias="OWNER_NAMES")
+    # O padrão já traz os nomes do dono; a env var OWNER_NAMES sobrescreve.
+    owner_names: str = Field(
+        default="Henrique,Laplace,Gimenez,Cana", alias="OWNER_NAMES"
+    )
 
     # --- E-mail (Plano B: IMAP) ---
     imap_host: str = Field(default="", alias="IMAP_HOST")

@@ -559,6 +559,7 @@ class DonnaTelegramBot:
             f"• OpenAI key: `{masked}` (len={len(key)})\n"
             f"• Modelo: `{s.openai_model}`\n"
             f"• Cérebro pronto: {self._brain.ready}\n"
+            f"• Nomes (grupos): {s.owner_names or '(nenhum)'}\n"
             f"• E-mail: {s.email_ready} | Agenda: {s.calendar_ready} | "
             f"WhatsApp: {s.whatsapp_enabled}"
         )
