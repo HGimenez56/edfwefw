@@ -234,10 +234,16 @@ class DonnaTelegramBot:
         await update.message.reply_text("🔔 *Pendências*", parse_mode=ParseMode.MARKDOWN)
         for c in items:
             who = f" — {c['who']}" if c["who"] else ""
-            keyboard = InlineKeyboardMarkup([[
+            buttons = [
                 InlineKeyboardButton("✅ Resolvi", callback_data=f"c|resolve|{c['id']}"),
                 InlineKeyboardButton("👎 Ignorar", callback_data=f"c|ignore|{c['id']}"),
-            ]])
+            ]
+            # Só oferece "ver original" quando há mensagem de origem.
+            if c["source_msg_id"]:
+                buttons.append(
+                    InlineKeyboardButton("🔎 Original", callback_data=f"c|orig|{c['id']}")
+                )
+            keyboard = InlineKeyboardMarkup([buttons])
             await update.message.reply_text(
                 f"{c['summary']}{who}", reply_markup=keyboard
             )
@@ -300,6 +306,26 @@ class DonnaTelegramBot:
             domain, signal, raw_id = (query.data or "").split("|", 2)
             item_id = int(raw_id)
         except ValueError:
+            return
+
+        if domain == "c" and signal == "orig":
+            # Mostra o pedido original ipsis litteris, sem mexer no card.
+            commitment = self._storage.get_commitment(item_id)
+            source = (
+                self._storage.get_message(commitment["source_msg_id"])
+                if commitment and commitment["source_msg_id"]
+                else None
+            )
+            if source is None:
+                await query.message.reply_text(
+                    "Não encontrei a mensagem original desta pendência."
+                )
+                return
+            origem = source["subject"] or source["sender"] or source["source"]
+            await query.message.reply_text(
+                f"🔎 Mensagem original ({source['source']} — {origem}, "
+                f"de {source['sender']}):\n\n“{(source['body'] or '')[:1500]}”"
+            )
             return
 
         if domain == "t":
@@ -387,7 +413,11 @@ class DonnaTelegramBot:
             except Exception as exc:
                 logger.error("Falha ao sincronizar calendário: %s", exc)
         result = await asyncio.to_thread(
-            extraction.run, self._storage, self._brain
+            extraction.run,
+            self._storage,
+            self._brain,
+            50,
+            self._settings.owner_names,
         )
         return new, result
 
@@ -413,7 +443,13 @@ class DonnaTelegramBot:
 
     async def _job_process_messages(self, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Processa mensagens não-lidas de qualquer fonte (e-mail, WhatsApp)."""
-        result = await asyncio.to_thread(extraction.run, self._storage, self._brain)
+        result = await asyncio.to_thread(
+            extraction.run,
+            self._storage,
+            self._brain,
+            50,
+            self._settings.owner_names,
+        )
         # Avisa de forma enxuta só quando surge algo que precisa de resposta.
         if result.commitments_created:
             await self._send_owner(

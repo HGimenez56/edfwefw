@@ -359,6 +359,12 @@ class Storage:
                 (limit,),
             ).fetchall()
 
+    def get_commitment(self, commitment_id: int) -> Optional[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM commitments WHERE id = ?", (commitment_id,)
+            ).fetchone()
+
     def set_commitment_status(self, commitment_id: int, status: str) -> None:
         with self._connect() as conn:
             conn.execute(

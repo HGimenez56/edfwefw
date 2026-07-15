@@ -23,31 +23,54 @@ logger = logging.getLogger(__name__)
 # Tipos de compromisso válidos (espelham o schema em storage.py).
 _VALID_KINDS = {"awaiting_my_reply", "i_promised", "awaiting_their_reply"}
 
-_INSTRUCTION = """\
+def build_instruction(owner_names: str = "") -> str:
+    """Monta o prompt de extração, com as regras de grupo do dono."""
+    names = [n.strip() for n in owner_names.split(",") if n.strip()]
+    if names:
+        group_rule = (
+            "- MENSAGEM DE GRUPO (canal contém '[grupo]'): só gere um "
+            "commitment 'awaiting_my_reply' se a mensagem chamar o dono "
+            f"explicitamente por um destes nomes: {', '.join(names)} "
+            "(ou @menção direta). Perguntas abertas ao grupo (ex.: 'alguém "
+            "chamou goleiro?') NÃO são pendência do dono — nesse caso não "
+            "gere commitment nenhum.\n"
+        )
+    else:
+        group_rule = (
+            "- MENSAGEM DE GRUPO (canal contém '[grupo]'): perguntas abertas "
+            "ao grupo NÃO são pendência do dono. Só gere 'awaiting_my_reply' "
+            "se a mensagem for claramente dirigida a ele (@menção/nome).\n"
+        )
+    return f"""\
 Você está analisando UMA mensagem do dono (e-mail OU WhatsApp). Extraia o que
 for acionável e responda APENAS em JSON com este formato exato:
 
-{
+{{
   "category": "trabalho" | "pessoal",
   "tasks": [
-    {"title": "curto e acionável",
+    {{"title": "curto e acionável",
      "details": "contexto opcional",
      "priority": 1-5,            // 1 = urgente/importante, 5 = baixo
-     "due_at": "YYYY-MM-DD" | null}
+     "due_at": "YYYY-MM-DD" | null}}
   ],
   "commitments": [
-    {"kind": "awaiting_my_reply" | "i_promised" | "awaiting_their_reply",
+    {{"kind": "awaiting_my_reply" | "i_promised" | "awaiting_their_reply",
      "who": "pessoa/cliente",
-     "summary": "o que está pendente"}
+     "summary": "o que está pendente"}}
   ]
-}
+}}
 
 Regras:
-- Se a mensagem foi RECEBIDA (direction=in) e pede uma ação/resposta sua, gere
-  um commitment "awaiting_my_reply".
-- Se foi ENVIADA por você (direction=out) e você prometeu algo, gere
+- Conversa INDIVIDUAL recebida (direction=in) que pede ação/resposta do dono:
+  gere um commitment "awaiting_my_reply".
+{group_rule}- Se foi ENVIADA por você (direction=out) e você prometeu algo, gere
   "i_promised"; se você está esperando retorno de alguém, "awaiting_their_reply".
+- O campo "summary" deve ser AUTOEXPLICATIVO: quem pediu, o quê, e onde.
+  Ex.: "João (grupo Futebol) perguntou se já chamaram goleiro" — nunca algo
+  vago como "responder mensagem" ou "acompanhar pedido".
+- O campo "who" deve ser o nome real de quem pediu (e o grupo, se houver).
 - Não invente prazos: use null quando não houver data clara.
+- Na dúvida se é pendência do dono, NÃO crie — menos ruído vale mais.
 - Se não houver nada acionável, devolva listas vazias.
 """
 
@@ -61,11 +84,18 @@ class ExtractionResult:
 
 
 def _format_message(row) -> str:
+    subject = row["subject"] or ""
+    if subject.startswith("[grupo]"):
+        canal = f"GRUPO de WhatsApp ({subject})"
+    elif row["source"] == "whatsapp":
+        canal = "conversa INDIVIDUAL de WhatsApp"
+    else:
+        canal = f"e-mail (assunto: {subject})"
     return (
+        f"canal: {canal}\n"
         f"direction: {row['direction']}\n"
         f"de: {row['sender']}\n"
         f"para: {row['recipient']}\n"
-        f"assunto: {row['subject']}\n"
         f"corpo:\n{row['body']}"
     )
 
@@ -84,9 +114,15 @@ def _resolve_pending(storage: Storage, recipient: str) -> int:
     return resolved
 
 
-def run(storage: Storage, brain: Brain, limit: int = 50) -> ExtractionResult:
+def run(
+    storage: Storage,
+    brain: Brain,
+    limit: int = 50,
+    owner_names: str = "",
+) -> ExtractionResult:
     """Processa mensagens não-lidas e popula tarefas/pendências."""
     result = ExtractionResult()
+    instruction = build_instruction(owner_names)
     messages = storage.unprocessed_messages(limit=limit)
     processed_ids: list[int] = []
 
@@ -102,7 +138,7 @@ def run(storage: Storage, brain: Brain, limit: int = 50) -> ExtractionResult:
         if not brain.ready:
             continue  # modo stub: só marca processado
 
-        data = brain.extract_json(_INSTRUCTION, _format_message(row))
+        data = brain.extract_json(instruction, _format_message(row))
         if not isinstance(data, dict):
             continue
 

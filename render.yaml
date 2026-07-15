@@ -39,6 +39,10 @@ services:
         value: "18"
       - key: EMAIL_POLL_MINUTES
         value: "10"
+      # Nomes pelos quais você é chamado (vírgula). Em grupos de WhatsApp, só
+      # vira pendência sua se a mensagem chamar um desses nomes.
+      - key: OWNER_NAMES
+        value: "Henrique,Laplace"
 
       # --- E-mail (preencha quando fizer o Passo 2; deixe em branco por ora) ---
       - key: EMAIL_BACKEND

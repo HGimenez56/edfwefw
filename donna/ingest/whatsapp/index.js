@@ -83,7 +83,7 @@ const insertStmt = db.prepare(`
     (source, direction, external_id, sender, recipient, subject, body,
      category, received_at, ingested_at, processed, raw)
   VALUES
-    ('whatsapp', @direction, @external_id, @sender, @recipient, NULL, @body,
+    ('whatsapp', @direction, @external_id, @sender, @recipient, @subject, @body,
      NULL, @received_at, @ingested_at, 0, NULL)
 `);
 
@@ -106,12 +106,16 @@ function persist(msg) {
   const fromMe = !!msg.key.fromMe;
   const chat = msg.key.remoteJid || '';
   const who = msg.pushName || chat;
+  // Grupos terminam em @g.us. Marcamos no subject para a extração saber que a
+  // mensagem NÃO foi (necessariamente) dirigida ao dono.
+  const isGroup = chat.endsWith('@g.us');
 
   const row = {
     direction: fromMe ? 'out' : 'in',
     external_id: msg.key.id,
     sender: fromMe ? 'me' : who,
     recipient: fromMe ? chat : 'me',
+    subject: isGroup ? `[grupo] ${chat}` : null,
     body: body.slice(0, 4000),
     received_at: msg.messageTimestamp
       ? new Date(Number(msg.messageTimestamp) * 1000).toISOString()
