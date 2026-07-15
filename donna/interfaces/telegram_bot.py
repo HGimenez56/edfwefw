@@ -44,6 +44,19 @@ from ..storage import Storage
 logger = logging.getLogger(__name__)
 
 
+def is_forwarded_message(message) -> bool:
+    """True se a mensagem foi encaminhada de outra conversa.
+
+    Usa getattr para os DOIS campos: `forward_date` foi removido do
+    python-telegram-bot v21+ e acessá-lo direto levanta AttributeError —
+    o que matava o handler de texto em silêncio para TODA mensagem normal.
+    """
+    return bool(
+        getattr(message, "forward_origin", None)
+        or getattr(message, "forward_date", None)
+    )
+
+
 class DonnaTelegramBot:
     """Encapsula o app do python-telegram-bot e seus handlers."""
 
@@ -74,6 +87,26 @@ class DonnaTelegramBot:
         self._app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text)
         )
+        # Rede de segurança: QUALQUER exceção em um handler é reportada ao dono
+        # em vez de morrer só no log — a Donna nunca mais fica muda sem avisar.
+        self._app.add_error_handler(self._on_error)
+
+    async def _on_error(self, update, context) -> None:
+        logger.error("Erro não tratado em handler:", exc_info=context.error)
+        try:
+            err = context.error
+            detail = f"{type(err).__name__}: {str(err)[:300]}"
+            target = None
+            if isinstance(update, Update) and update.effective_chat:
+                target = update.effective_chat.id
+            elif self._settings.telegram_owner_chat_id:
+                target = self._settings.telegram_owner_chat_id
+            if target:
+                await self._app.bot.send_message(
+                    target, f"⚠️ Deu um erro interno aqui: {detail}"
+                )
+        except Exception:  # noqa: BLE001 — o reporte de erro nunca pode quebrar
+            logger.exception("Falha ao reportar erro ao dono.")
 
     def _register_jobs(self) -> None:
         """Agenda poll de e-mail, briefing diário e prévia semanal."""
@@ -281,7 +314,8 @@ class DonnaTelegramBot:
             return
 
         # Reflete o resultado removendo os botões e anexando a confirmação.
-        original = query.message.text or ""
+        # getattr: em botões antigos o Telegram pode não entregar o texto.
+        original = getattr(query.message, "text", None) or ""
         await query.edit_message_text(f"{original}\n\n— {msg}")
 
     async def _cmd_note(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -466,11 +500,7 @@ class DonnaTelegramBot:
         text = update.message.text or ""
 
         # Captura rápida: mensagem encaminhada vira tarefa automaticamente.
-        is_forwarded = bool(
-            getattr(update.message, "forward_origin", None)
-            or update.message.forward_date
-        )
-        if is_forwarded:
+        if is_forwarded_message(update.message):
             self._storage.add_task(title=text[:200] or "(encaminhado)", priority=3)
             await update.message.reply_text(
                 "📝 Encaminhado guardado como tarefa. Veja em /tarefas."

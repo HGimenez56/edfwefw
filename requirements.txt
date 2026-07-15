@@ -1,7 +1,9 @@
 # Núcleo da Donna
 openai>=1.40.0
 # [job-queue] habilita a JobQueue interna (briefings/poll), via APScheduler.
-python-telegram-bot[job-queue]>=21.0
+# Teto <23: upgrades de versão maior removem campos (ex.: forward_date sumiu
+# na v21 e silenciou a conversa livre) — subir de major só com teste.
+python-telegram-bot[job-queue]>=21.0,<23
 python-dotenv>=1.0
 pydantic>=2.7
 pydantic-settings>=2.3
