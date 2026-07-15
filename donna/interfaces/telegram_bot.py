@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import time as dtime
 from zoneinfo import ZoneInfo
 
+import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -418,8 +420,12 @@ class DonnaTelegramBot:
             masked = f"(muito curta: {len(key)} chars)"
         else:
             masked = f"{key[:7]}…{key[-4:]}"
+        # O Render injeta RENDER_GIT_COMMIT: mostra qual código está no ar,
+        # para diferenciar "deploy antigo ainda rodando" de problema real.
+        build = os.getenv("RENDER_GIT_COMMIT", "desconhecido")[:7]
         status = (
             "🔧 *Diagnóstico da Donna*\n"
+            f"• Build: `{build}`\n"
             f"• OpenAI key: `{masked}` (len={len(key)})\n"
             f"• Modelo: `{s.openai_model}`\n"
             f"• Cérebro pronto: {self._brain.ready}\n"
@@ -428,6 +434,17 @@ class DonnaTelegramBot:
         )
         await update.message.reply_text(status, parse_mode=ParseMode.MARKDOWN)
 
+        # Etapa 1: a REDE alcança a OpenAI? (sem autenticação; 401 rápido = ok)
+        def _net_probe() -> str:
+            try:
+                r = requests.get("https://api.openai.com/v1/models", timeout=10)
+                return f"HTTP {r.status_code} (rede ok)"
+            except Exception as exc:  # noqa: BLE001
+                return f"{type(exc).__name__}: {str(exc)[:200]}"
+        net = await asyncio.to_thread(_net_probe)
+        await update.message.reply_text(f"🌐 Rede até a OpenAI: {net}")
+
+        # Etapa 2: chamada real com a sua chave (timeout de 30s).
         await self._app.bot.send_chat_action(update.effective_chat.id, "typing")
         try:
             reply = await asyncio.to_thread(
