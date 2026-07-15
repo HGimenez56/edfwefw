@@ -42,7 +42,7 @@ services:
       # Nomes pelos quais você é chamado (vírgula). Em grupos de WhatsApp, só
       # vira pendência sua se a mensagem chamar um desses nomes.
       - key: OWNER_NAMES
-        value: "Henrique,Laplace"
+        value: "Henrique,Laplace,Gimenez,Cana"
 
       # --- E-mail (preencha quando fizer o Passo 2; deixe em branco por ora) ---
       - key: EMAIL_BACKEND

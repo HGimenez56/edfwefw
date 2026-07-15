@@ -26,20 +26,26 @@ _VALID_KINDS = {"awaiting_my_reply", "i_promised", "awaiting_their_reply"}
 def build_instruction(owner_names: str = "") -> str:
     """Monta o prompt de extração, com as regras de grupo do dono."""
     names = [n.strip() for n in owner_names.split(",") if n.strip()]
+    mention_rule = (
+        "- Se o canal contiver a marca [mencionado], o dono FOI @marcado ou "
+        "respondido diretamente nesse grupo: trate como dirigida a ele e "
+        "gere o commitment se houver pedido.\n"
+    )
     if names:
         group_rule = (
             "- MENSAGEM DE GRUPO (canal contém '[grupo]'): só gere um "
             "commitment 'awaiting_my_reply' se a mensagem chamar o dono "
-            f"explicitamente por um destes nomes: {', '.join(names)} "
-            "(ou @menção direta). Perguntas abertas ao grupo (ex.: 'alguém "
-            "chamou goleiro?') NÃO são pendência do dono — nesse caso não "
-            "gere commitment nenhum.\n"
+            f"explicitamente por um destes nomes: {', '.join(names)}. "
+            "Perguntas abertas ao grupo (ex.: 'alguém chamou goleiro?') NÃO "
+            "são pendência do dono — nesse caso não gere commitment nenhum.\n"
+            + mention_rule
         )
     else:
         group_rule = (
             "- MENSAGEM DE GRUPO (canal contém '[grupo]'): perguntas abertas "
             "ao grupo NÃO são pendência do dono. Só gere 'awaiting_my_reply' "
-            "se a mensagem for claramente dirigida a ele (@menção/nome).\n"
+            "se a mensagem for claramente dirigida a ele pelo nome.\n"
+            + mention_rule
         )
     return f"""\
 Você está analisando UMA mensagem do dono (e-mail OU WhatsApp). Extraia o que
@@ -86,7 +92,10 @@ class ExtractionResult:
 def _format_message(row) -> str:
     subject = row["subject"] or ""
     if subject.startswith("[grupo]"):
-        canal = f"GRUPO de WhatsApp ({subject})"
+        if "[mencionado]" in subject:
+            canal = f"GRUPO de WhatsApp — o dono FOI @MENCIONADO ({subject})"
+        else:
+            canal = f"GRUPO de WhatsApp ({subject})"
     elif row["source"] == "whatsapp":
         canal = "conversa INDIVIDUAL de WhatsApp"
     else:

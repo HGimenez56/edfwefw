@@ -99,6 +99,37 @@ function extractText(message) {
   );
 }
 
+// Número do dono (preenchido quando a conexão abre). Usado para detectar
+// @menções e replies dirigidos a ele em grupos.
+let ownNumber = '';
+
+function extractContextInfo(message) {
+  if (!message) return undefined;
+  return (
+    message.extendedTextMessage?.contextInfo ||
+    message.imageMessage?.contextInfo ||
+    message.videoMessage?.contextInfo ||
+    message.documentMessage?.contextInfo ||
+    undefined
+  );
+}
+
+// True se o dono foi @marcado na mensagem ou se ela é uma resposta (reply)
+// a uma mensagem dele. O WhatsApp envia as menções como JIDs no campo
+// mentionedJid — detecção exata, independente do apelido usado no @.
+function isDirectedAtOwner(msg) {
+  if (!ownNumber) return false;
+  const ctx = extractContextInfo(msg.message);
+  if (!ctx) return false;
+  const mentioned = (ctx.mentionedJid || []).some((j) =>
+    String(j).replace(/\D/g, '').startsWith(ownNumber)
+  );
+  const replyToOwner = ctx.participant
+    ? String(ctx.participant).replace(/\D/g, '').startsWith(ownNumber)
+    : false;
+  return mentioned || replyToOwner;
+}
+
 function persist(msg) {
   const body = extractText(msg.message).trim();
   if (!body) return; // ignora mídias sem legenda, status, etc.
@@ -107,15 +138,17 @@ function persist(msg) {
   const chat = msg.key.remoteJid || '';
   const who = msg.pushName || chat;
   // Grupos terminam em @g.us. Marcamos no subject para a extração saber que a
-  // mensagem NÃO foi (necessariamente) dirigida ao dono.
+  // mensagem NÃO foi (necessariamente) dirigida ao dono — exceto quando ele
+  // foi @mencionado ou respondido, marcado como [mencionado].
   const isGroup = chat.endsWith('@g.us');
+  const directed = isGroup && !fromMe && isDirectedAtOwner(msg);
 
   const row = {
     direction: fromMe ? 'out' : 'in',
     external_id: msg.key.id,
     sender: fromMe ? 'me' : who,
     recipient: fromMe ? chat : 'me',
-    subject: isGroup ? `[grupo] ${chat}` : null,
+    subject: isGroup ? `[grupo]${directed ? '[mencionado]' : ''} ${chat}` : null,
     body: body.slice(0, 4000),
     received_at: msg.messageTimestamp
       ? new Date(Number(msg.messageTimestamp) * 1000).toISOString()
@@ -194,7 +227,12 @@ async function start() {
     }
     if (connection === 'open') {
       if (pairingTimer) { clearInterval(pairingTimer); pairingTimer = null; }
-      logger.info('WhatsApp conectado (somente leitura).');
+      // Guarda o número do dono para detectar @menções/replies em grupos.
+      ownNumber = String(sock.user?.id || '').split(':')[0].replace(/\D/g, '');
+      logger.info(
+        { own: ownNumber ? `...${ownNumber.slice(-4)}` : 'desconhecido' },
+        'WhatsApp conectado (somente leitura).'
+      );
     }
     if (connection === 'close') {
       if (pairingTimer) { clearInterval(pairingTimer); pairingTimer = null; }

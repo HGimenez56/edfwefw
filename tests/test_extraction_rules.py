@@ -50,6 +50,21 @@ def test_group_message_is_flagged_as_group_in_content(tmp_path: Path) -> None:
     assert "Henrique" in brain.instructions[0]
 
 
+def test_mentioned_group_message_is_flagged_directed(tmp_path: Path) -> None:
+    store = Storage(tmp_path / "t.db")
+    store.add_message(
+        source="whatsapp", direction="in", external_id="m1",
+        sender="João", recipient="me",
+        subject="[grupo][mencionado] 123@g.us",
+        body="@Cana confirma o goleiro?",
+    )
+    brain = CapturingBrain()
+    extraction.run(store, brain, owner_names="Henrique,Laplace,Gimenez,Cana")
+    assert "FOI @MENCIONADO" in brain.contents[0]
+    assert "[mencionado]" in brain.instructions[0]
+    assert "Cana" in brain.instructions[0]
+
+
 def test_individual_whatsapp_is_flagged_individual(tmp_path: Path) -> None:
     store = Storage(tmp_path / "t.db")
     store.add_message(
